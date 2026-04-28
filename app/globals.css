@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-serif: "Crimson Pro", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+html,
+body {
+  background: #faf6ee;
+  color: #1a1815;
+  font-family: var(--font-serif);
+  font-feature-settings: "kern", "liga", "onum";
+}
+
+/* Subtle paper grain — very light noise overlay */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+main,
+header,
+footer {
+  position: relative;
+  z-index: 1;
+}
+
+/* Drop cap for first paragraph in a list item summary */
+.summary::first-letter {
+  font-size: 2.4em;
+  font-weight: 600;
+  float: left;
+  line-height: 0.85;
+  margin: 0.1em 0.08em 0 0;
+  color: #7a1f1f;
+  font-family: var(--font-serif);
+}
+
+/* Quiet underline link style */
+.link-underline {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(122, 31, 31, 0.4);
+  transition: text-decoration-color 0.2s;
+}
+.link-underline:hover {
+  text-decoration-color: #7a1f1f;
+}
+
+/* Stagger entrance */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.rise {
+  animation: rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
