@@ -3,6 +3,7 @@ import { Crimson_Pro, JetBrains_Mono } from "next/font/google";
 import { StackProvider, StackTheme } from "@stackframe/stack";
 import { stackServerApp } from "@/stack";
 import { Suspense } from "react";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const serif = Crimson_Pro({
@@ -36,6 +37,7 @@ export default function RootLayout({
             <StackTheme>{children}</StackTheme>
           </StackProvider>
         </Suspense>
+        <Analytics />
       </body>
     </html>
   );
