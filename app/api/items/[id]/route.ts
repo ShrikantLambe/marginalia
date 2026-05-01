@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { stackServerApp } from "@/stack";
 import { supabase } from "@/lib/supabase";
+import { embed, buildEmbeddingText, EMBEDDING_MODEL } from "@/lib/embeddings";
 
 export const runtime = "nodejs";
 
@@ -40,9 +41,35 @@ export async function PATCH(
   }
 
   if (body.highlights !== undefined) updates.highlights = body.highlights;
+  if (body.summary !== undefined) updates.summary = body.summary;
+  if (body.tags !== undefined) updates.tags = body.tags;
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  }
+
+  // Re-embed if summary or tags changed
+  if (body.summary !== undefined || body.tags !== undefined) {
+    try {
+      const { data: current } = await supabase
+        .from("reading_list")
+        .select("title, summary, tags")
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .single();
+
+      if (current) {
+        const title = current.title;
+        const summary = (updates.summary as string | undefined) ?? current.summary;
+        const tags = (updates.tags as string[] | undefined) ?? current.tags;
+        const vector = await embed(buildEmbeddingText(title, summary, tags));
+        updates.embedding = `[${vector.join(",")}]`;
+        updates.embedding_model = EMBEDDING_MODEL;
+        updates.embedded_at = new Date().toISOString();
+      }
+    } catch (e) {
+      console.error("[PATCH /api/items] re-embed failed:", e);
+    }
   }
 
   const { data, error } = await supabase

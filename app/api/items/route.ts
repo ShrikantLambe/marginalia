@@ -2,10 +2,9 @@ import { NextResponse } from "next/server";
 import { stackServerApp } from "@/stack";
 import { supabase } from "@/lib/supabase";
 import { fetchAndSummarize } from "@/lib/summarize";
+import { embed, buildEmbeddingText, EMBEDDING_MODEL } from "@/lib/embeddings";
 
-// jsdom requires Node runtime, not Edge
 export const runtime = "nodejs";
-// Summarization can take a few seconds
 export const maxDuration = 30;
 
 export async function POST(req: Request) {
@@ -28,9 +27,22 @@ export async function POST(req: Request) {
   try {
     const { title, summary, tags } = await fetchAndSummarize(url);
 
+    // Generate embedding — fail gracefully so a save is never lost
+    let embeddingFields: Record<string, unknown> = {};
+    try {
+      const vector = await embed(buildEmbeddingText(title, summary, tags));
+      embeddingFields = {
+        embedding: `[${vector.join(",")}]`,
+        embedding_model: EMBEDDING_MODEL,
+        embedded_at: new Date().toISOString(),
+      };
+    } catch (e) {
+      console.error("[POST /api/items] embedding failed, saving without:", e);
+    }
+
     const { data, error } = await supabase
       .from("reading_list")
-      .insert({ user_id: user.id, url, title, summary, tags })
+      .insert({ user_id: user.id, url, title, summary, tags, ...embeddingFields })
       .select()
       .single();
 

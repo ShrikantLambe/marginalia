@@ -24,4 +24,9 @@ export type ReadingItem = {
   rating: number | null;
   read_at: string | null;
   last_opened_at: string | null;
+  // Phase 2
+  embedding_model: string | null;
+  embedded_at: string | null;
 };
+
+export type SearchResult = ReadingItem & { similarity: number };
