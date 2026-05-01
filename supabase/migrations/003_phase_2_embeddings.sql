@@ -13,8 +13,9 @@ create index if not exists reading_list_embedding_idx
   on reading_list using hnsw (embedding vector_cosine_ops);
 
 -- RPC function for semantic search — returns full row + similarity score
+-- query_embedding is text ('[0.1,0.2,...]') so PostgREST doesn't need to cast it
 create or replace function match_reading_list(
-  query_embedding  vector(768),
+  query_embedding  text,
   match_user_id    text,
   match_threshold  float,
   match_count      int
@@ -40,11 +41,11 @@ as $$
   select
     id, user_id, url, title, summary, tags, created_at,
     status, notes, highlights, rating, read_at, last_opened_at,
-    (1 - (embedding <=> query_embedding))::float as similarity
+    (1 - (embedding <=> query_embedding::vector))::float as similarity
   from reading_list
   where user_id = match_user_id
     and embedding is not null
-    and (1 - (embedding <=> query_embedding)) > match_threshold
-  order by embedding <=> query_embedding
+    and (1 - (embedding <=> query_embedding::vector)) > match_threshold
+  order by embedding <=> query_embedding::vector
   limit match_count;
 $$;
