@@ -32,9 +32,10 @@ export async function POST(req: Request) {
   try {
     queryEmbedding = await embed(query);
   } catch (e) {
-    console.error("[POST /api/search] embed failed:", e);
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[POST /api/search] embed failed:", msg);
     return NextResponse.json(
-      { error: "Failed to process search query" },
+      { error: `Embedding failed: ${msg}` },
       { status: 500 }
     );
   }
