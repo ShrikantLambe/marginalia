@@ -46,11 +46,17 @@ export async function POST(req: Request) {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error("[POST /api/items] supabase error:", JSON.stringify(error));
+      return NextResponse.json({ error: error.message || JSON.stringify(error) }, { status: 500 });
+    }
     return NextResponse.json(data);
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Failed to summarize";
-    console.error("[POST /api/items]", message);
+    const message =
+      e instanceof Error ? e.message
+      : e && typeof e === "object" && "message" in e ? String((e as Record<string, unknown>).message)
+      : String(e);
+    console.error("[POST /api/items] caught:", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
