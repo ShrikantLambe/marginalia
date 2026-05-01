@@ -36,14 +36,29 @@ export async function GET() {
   }
 
   // 2. Item counts
+  result.stack_auth_user_id = user.id;
+
   const { data: counts } = await supabase
     .from("reading_list")
-    .select("id, embedded_at")
+    .select("id, user_id, embedded_at")
     .eq("user_id", user.id);
 
   result.total_items = counts?.length ?? 0;
   result.items_with_embeddings = counts?.filter((r) => r.embedded_at).length ?? 0;
   result.items_missing_embeddings = counts?.filter((r) => !r.embedded_at).length ?? 0;
+
+  // Count all rows regardless of user to detect project mismatch
+  const { count: allRows } = await supabase
+    .from("reading_list")
+    .select("*", { count: "exact", head: true });
+  result.total_rows_in_table = allRows ?? 0;
+
+  // Show distinct user_ids in the table
+  const { data: userRows } = await supabase
+    .from("reading_list")
+    .select("user_id")
+    .limit(5);
+  result.sample_user_ids_in_db = [...new Set(userRows?.map((r) => r.user_id) ?? [])];
 
   // 3. Does the RPC function exist?
   if (result.embed?.toString().startsWith("ok")) {

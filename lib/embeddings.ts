@@ -1,6 +1,6 @@
 import "server-only";
 
-export const EMBEDDING_MODEL = "text-embedding-004";
+export const EMBEDDING_MODEL = "gemini-embedding-001";
 export const EMBEDDING_DIM = 768;
 
 export function buildEmbeddingText(
@@ -17,7 +17,7 @@ export function buildEmbeddingText(
 // v1beta which does not expose text-embedding-004.
 export async function embed(text: string): Promise<number[]> {
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1/models/${EMBEDDING_MODEL}:embedContent?key=${process.env.GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent?key=${process.env.GEMINI_API_KEY}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
