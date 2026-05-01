@@ -48,10 +48,12 @@ export async function GET() {
   result.items_missing_embeddings = counts?.filter((r) => !r.embedded_at).length ?? 0;
 
   // Count all rows regardless of user to detect project mismatch
-  const { count: allRows } = await supabase
+  const { count: allRows, error: tableError } = await supabase
     .from("reading_list")
     .select("*", { count: "exact", head: true });
-  result.total_rows_in_table = allRows ?? 0;
+  result.total_rows_in_table = tableError
+    ? `TABLE ERROR: ${tableError.message}`
+    : (allRows ?? 0);
 
   // Show distinct user_ids in the table
   const { data: userRows } = await supabase
