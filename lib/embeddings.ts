@@ -1,7 +1,7 @@
 import "server-only";
 
 export const EMBEDDING_MODEL = "gemini-embedding-001";
-export const EMBEDDING_DIM = 3072;
+export const EMBEDDING_DIM = 768;
 
 export function buildEmbeddingText(
   title: string | null,
@@ -24,6 +24,7 @@ export async function embed(text: string): Promise<number[]> {
       body: JSON.stringify({
         model: `models/${EMBEDDING_MODEL}`,
         content: { parts: [{ text }] },
+        outputDimensionality: EMBEDDING_DIM,
       }),
     }
   );

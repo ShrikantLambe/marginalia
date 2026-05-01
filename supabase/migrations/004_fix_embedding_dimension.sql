@@ -1,23 +1,14 @@
--- Fix: gemini-embedding-001 returns 3072 dimensions, not 768.
--- Also resolves the overloaded match_reading_list ambiguity.
+-- Fix: drop conflicting match_reading_list overloads (one with vector param,
+-- one with text param) and recreate with a single text-param version.
+-- The embedding column stays vector(768) — we truncate via outputDimensionality
+-- in the API call so the schema needs no changes.
 -- Run in Supabase SQL Editor.
 
--- 1. Drop conflicting RPC overloads
+-- 1. Drop both overloads
 drop function if exists public.match_reading_list(public.vector, text, float, integer);
 drop function if exists public.match_reading_list(text, text, float, integer);
 
--- 2. Drop HNSW index (depends on column type)
-drop index if exists reading_list_embedding_idx;
-
--- 3. Resize embedding column to 3072
-alter table reading_list drop column if exists embedding;
-alter table reading_list add column embedding vector(3072);
-
--- 4. Recreate HNSW index
-create index reading_list_embedding_idx
-  on reading_list using hnsw (embedding vector_cosine_ops);
-
--- 5. Recreate RPC with correct dimension and text parameter
+-- 2. Recreate with a single unambiguous signature
 create function match_reading_list(
   query_embedding  text,
   match_user_id    text,
