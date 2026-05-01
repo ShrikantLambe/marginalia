@@ -1,7 +1,7 @@
 import "server-only";
 
 export const EMBEDDING_MODEL = "gemini-embedding-001";
-export const EMBEDDING_DIM = 768;
+export const EMBEDDING_DIM = 3072;
 
 export function buildEmbeddingText(
   title: string | null,
