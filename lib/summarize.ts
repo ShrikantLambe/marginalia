@@ -28,7 +28,17 @@ export async function fetchAndSummarize(url: string): Promise<Summary> {
     signal: AbortSignal.timeout(15_000),
     redirect: "follow",
   });
-  if (!res.ok) throw new Error(`Failed to fetch URL (${res.status})`);
+  if (!res.ok) {
+    if (res.status === 403 || res.status === 401) {
+      throw new Error(
+        "This page is behind a paywall or is blocking automated access. Try a non-paywalled URL or a cached version (e.g. archive.ph)."
+      );
+    }
+    if (res.status === 404) throw new Error("Page not found (404).");
+    if (res.status === 429) throw new Error("The site is rate-limiting requests. Try again in a moment.");
+    if (res.status >= 500) throw new Error(`The site returned a server error (${res.status}). Try again later.`);
+    throw new Error(`Could not fetch the page (HTTP ${res.status}).`);
+  }
 
   const html = await res.text();
 
