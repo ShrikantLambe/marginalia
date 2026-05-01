@@ -392,6 +392,7 @@ export function ReadingList({ initialItems, userName }: {
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [dismissed, setDismissed] = useState<Record<string, string>>(() => {
@@ -405,11 +406,13 @@ export function ReadingList({ initialItems, userName }: {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!searchQuery.trim()) {
       setSearchResults(null);
+      setSearchError(null);
       setSearching(false);
       return;
     }
     debounceRef.current = setTimeout(async () => {
       setSearching(true);
+      setSearchError(null);
       try {
         const res = await fetch("/api/search", {
           method: "POST",
@@ -423,7 +426,29 @@ export function ReadingList({ initialItems, userName }: {
             tags: tagFilters.length ? tagFilters : undefined,
           }),
         });
-        if (res.ok) setSearchResults(await res.json());
+        const json = await res.json();
+        if (!res.ok) {
+          const msg = json?.error ?? "Search failed";
+          setSearchError(
+            msg.includes("does not exist") || msg.includes("match_reading_list")
+              ? "Search index not ready. Run the Phase 2 migration in Supabase first."
+              : msg
+          );
+          setSearchResults(null);
+        } else {
+          setSearchResults(json);
+          if (json.length === 0) {
+            // Check if items simply have no embeddings yet
+            const unembedded = items.filter((i) => !i.embedded_at).length;
+            if (unembedded > 0) {
+              setSearchError(
+                `${unembedded} item${unembedded > 1 ? "s" : ""} not yet indexed. Run backfill: fetch('/api/items/backfill-embeddings',{method:'POST'}).then(r=>r.json()).then(console.log)`
+              );
+            }
+          }
+        }
+      } catch {
+        setSearchError("Search request failed. Check your connection.");
       } finally {
         setSearching(false);
       }
@@ -627,12 +652,18 @@ export function ReadingList({ initialItems, userName }: {
         </div>
       )}
 
-      {/* Search status line */}
-      {isSearching && !searching && searchResults !== null && (
-        <div className="mb-6 font-mono text-[10px] tracking-[0.15em] uppercase text-muted">
-          {searchResults.length === 0
-            ? "No results above 40% match"
-            : `${searchResults.length} result${searchResults.length > 1 ? "s" : ""} · semantic search`}
+      {/* Search status / error line */}
+      {isSearching && !searching && (
+        <div className="mb-6 font-mono text-[10px] tracking-[0.15em] uppercase">
+          {searchError ? (
+            <p className="text-oxblood normal-case font-serif text-sm italic">{searchError}</p>
+          ) : searchResults !== null && (
+            <span className="text-muted">
+              {searchResults.length === 0
+                ? "No results above 40% match"
+                : `${searchResults.length} result${searchResults.length > 1 ? "s" : ""} · semantic search`}
+            </span>
+          )}
         </div>
       )}
 
