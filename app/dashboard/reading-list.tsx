@@ -394,6 +394,7 @@ export function ReadingList({ initialItems, userName }: {
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
+  const [backfillStatus, setBackfillStatus] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [dismissed, setDismissed] = useState<Record<string, string>>(() => {
     if (typeof window === "undefined") return {};
@@ -536,6 +537,17 @@ export function ReadingList({ initialItems, userName }: {
     localStorage.setItem("marginalia_dismissed", JSON.stringify(next));
   }
 
+  async function runBackfill() {
+    setBackfillStatus("Indexing…");
+    try {
+      const res = await fetch("/api/items/backfill-embeddings", { method: "POST" });
+      const { processed, failed } = await res.json();
+      setBackfillStatus(`Indexed ${processed} item${processed !== 1 ? "s" : ""}${failed ? `, ${failed} failed` : ""} — try searching now`);
+    } catch {
+      setBackfillStatus("Backfill failed — check console");
+    }
+  }
+
   const TABS: { key: Filter; label: string; count: number }[] = [
     { key: "active", label: "Unread & Reading", count: counts.active },
     { key: "unread", label: "Unread", count: counts.unread },
@@ -557,6 +569,14 @@ export function ReadingList({ initialItems, userName }: {
         </div>
         <div className="flex items-center gap-4">
           <span className="font-serif italic text-ink/60 text-sm hidden sm:inline">for {userName}</span>
+          <button
+            onClick={runBackfill}
+            disabled={backfillStatus === "Indexing…"}
+            title="Index items for semantic search"
+            className="font-mono text-[10px] tracking-[0.15em] uppercase text-muted hover:text-ink transition-colors disabled:opacity-40"
+          >
+            {backfillStatus ?? "Index"}
+          </button>
           {user ? <UserButton /> : null}
         </div>
       </header>

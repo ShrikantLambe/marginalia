@@ -5,7 +5,7 @@ import { embed } from "@/lib/embeddings";
 
 export const runtime = "nodejs";
 
-const SIMILARITY_THRESHOLD = 0.4;
+const SIMILARITY_THRESHOLD = 0.2;
 
 export async function POST(req: Request) {
   const user = await stackServerApp.getUser();
