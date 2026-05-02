@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useUser, UserButton } from "@stackframe/stack";
-import type { ReadingItem, Highlight, SearchResult } from "@/lib/supabase";
+import type { ReadingItem, Highlight, SearchResult, ReadingTheme } from "@/lib/supabase";
 
 type Status = "unread" | "reading" | "read" | "archived";
 type Filter = "active" | "unread" | "reading" | "read" | "archived" | "all";
@@ -68,6 +68,66 @@ function StarRating({ value, onChange }: { value: number | null; onChange: (n: n
           aria-label={`${n} star${n > 1 ? "s" : ""}`}
         >★</button>
       ))}
+    </div>
+  );
+}
+
+// ── Theme card ───────────────────────────────────────────────────────────────
+
+function ThemeCard({
+  theme, active, onClick, onRename,
+}: {
+  theme: ReadingTheme;
+  active: boolean;
+  onClick: () => void;
+  onRename: (name: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [nameValue, setNameValue] = useState(theme.name);
+
+  function handleBlur() {
+    setEditing(false);
+    if (nameValue.trim() && nameValue.trim() !== theme.name) {
+      onRename(nameValue.trim());
+    } else {
+      setNameValue(theme.name);
+    }
+  }
+
+  return (
+    <div
+      className={`border p-4 transition-colors cursor-pointer ${
+        active ? "border-oxblood bg-oxblood/5" : "border-rule hover:border-ink"
+      }`}
+      onClick={() => { if (!editing) onClick(); }}
+    >
+      <div className="flex items-start justify-between gap-2 mb-1">
+        {editing ? (
+          <input
+            autoFocus
+            value={nameValue}
+            onChange={e => setNameValue(e.target.value)}
+            onBlur={handleBlur}
+            onKeyDown={e => { if (e.key === "Enter") handleBlur(); if (e.key === "Escape") { setEditing(false); setNameValue(theme.name); } }}
+            onClick={e => e.stopPropagation()}
+            className="flex-1 bg-transparent border-b border-rule focus:border-oxblood outline-none font-serif text-base font-semibold"
+          />
+        ) : (
+          <h3
+            className="font-serif text-base font-semibold leading-tight flex-1"
+            onDoubleClick={e => { e.stopPropagation(); setEditing(true); }}
+            title="Double-click to rename"
+          >
+            {theme.name}
+          </h3>
+        )}
+        <span className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted flex-shrink-0">
+          {theme.item_count}
+        </span>
+      </div>
+      {theme.description && (
+        <p className="font-serif text-sm text-ink/65 leading-snug">{theme.description}</p>
+      )}
     </div>
   );
 }
@@ -379,8 +439,9 @@ function TodaysPick({ item, onMarkRead, onDismiss }: {
 
 // ── Main component ───────────────────────────────────────────────────────────
 
-export function ReadingList({ initialItems, userName }: {
+export function ReadingList({ initialItems, initialThemes, userName }: {
   initialItems: ReadingItem[];
+  initialThemes: ReadingTheme[];
   userName: string;
 }) {
   const user = useUser();
@@ -395,6 +456,11 @@ export function ReadingList({ initialItems, userName }: {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [backfillStatus, setBackfillStatus] = useState<string | null>(null);
+  const [themes, setThemes] = useState<ReadingTheme[]>(initialThemes);
+  const [activeThemeId, setActiveThemeId] = useState<string | null>(null);
+  const [themesExpanded, setThemesExpanded] = useState(initialThemes.length >= 2);
+  const [refreshingThemes, setRefreshingThemes] = useState(false);
+  const [themeError, setThemeError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [dismissed, setDismissed] = useState<Record<string, string>>(() => {
     if (typeof window === "undefined") return {};
@@ -466,13 +532,16 @@ export function ReadingList({ initialItems, userName }: {
     all: items.filter((i) => i.status !== "archived").length,
   };
 
+  const activeTheme = themes.find(t => t.id === activeThemeId) ?? null;
+
   const filteredItems = items.filter((item) => {
     const s = item.status ?? "unread";
     const statusOk = filter === "active" ? s === "unread" || s === "reading"
       : filter === "all" ? s !== "archived"
       : s === filter;
     const tagsOk = tagFilters.every((t) => item.tags?.includes(t));
-    return statusOk && tagsOk;
+    const themeOk = !activeTheme || activeTheme.item_ids.includes(item.id);
+    return statusOk && tagsOk && themeOk;
   });
 
   const isSearching = searchQuery.trim().length > 0;
@@ -540,6 +609,35 @@ export function ReadingList({ initialItems, userName }: {
     const next = { ...dismissed, [id]: until };
     setDismissed(next);
     localStorage.setItem("marginalia_dismissed", JSON.stringify(next));
+  }
+
+  async function refreshThemes() {
+    setRefreshingThemes(true);
+    setThemeError(null);
+    try {
+      const res = await fetch("/api/themes", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) { setThemeError(json.error ?? "Failed to refresh themes"); return; }
+      const updated = await fetch("/api/themes").then(r => r.json());
+      setThemes(updated);
+      setThemesExpanded(updated.length >= 2);
+    } catch {
+      setThemeError("Failed to refresh themes");
+    } finally {
+      setRefreshingThemes(false);
+    }
+  }
+
+  async function renameTheme(id: string, name: string) {
+    const res = await fetch(`/api/themes/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setThemes(prev => prev.map(t => t.id === id ? updated : t));
+    }
   }
 
   async function runBackfill() {
@@ -639,6 +737,49 @@ export function ReadingList({ initialItems, userName }: {
           )}
         </div>
       </section>
+
+      {/* Themes section */}
+      {themes.length >= 2 && (
+        <section className="mb-8">
+          <div className="flex items-center justify-between mb-3">
+            <button
+              onClick={() => setThemesExpanded(v => !v)}
+              className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted hover:text-ink transition-colors flex items-center gap-2"
+            >
+              {themesExpanded ? "▴" : "▾"} Reading Themes · {themes.length}
+            </button>
+            <button
+              onClick={refreshThemes}
+              disabled={refreshingThemes}
+              className="font-mono text-[10px] tracking-[0.15em] uppercase text-muted hover:text-ink transition-colors disabled:opacity-40"
+            >
+              {refreshingThemes ? "Clustering…" : "Refresh"}
+            </button>
+          </div>
+          {themeError && (
+            <p className="font-serif italic text-oxblood text-sm mb-3">{themeError}</p>
+          )}
+          {themesExpanded && (
+            <div className="grid sm:grid-cols-2 gap-3">
+              {themes.map(theme => (
+                <ThemeCard
+                  key={theme.id}
+                  theme={theme}
+                  active={activeThemeId === theme.id}
+                  onClick={() => setActiveThemeId(activeThemeId === theme.id ? null : theme.id)}
+                  onRename={(name) => renameTheme(theme.id, name)}
+                />
+              ))}
+            </div>
+          )}
+          {activeTheme && (
+            <div className="mt-3 flex items-center gap-2 font-mono text-[10px] tracking-[0.15em] uppercase text-oxblood">
+              <span>Filtered by: {activeTheme.name}</span>
+              <button onClick={() => setActiveThemeId(null)} className="text-muted hover:text-ink transition-colors">✕ clear</button>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Active tag filters */}
       {tagFilters.length > 0 && (

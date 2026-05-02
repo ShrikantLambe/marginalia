@@ -30,3 +30,15 @@ export type ReadingItem = {
 };
 
 export type SearchResult = ReadingItem & { similarity: number };
+
+export type ReadingTheme = {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  centroid: string | null;
+  item_ids: string[];
+  item_count: number;
+  generated_at: string;
+  user_renamed: boolean;
+};
