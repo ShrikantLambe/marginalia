@@ -57,5 +57,11 @@ export async function POST() {
   }
 
   const n = await clusterUser(user.id);
+  if (n === 0) {
+    return NextResponse.json(
+      { error: "No clusters found — your articles may cover too many unrelated topics, or more articles are needed for patterns to emerge." },
+      { status: 400 }
+    );
+  }
   return NextResponse.json({ ok: true, themes: n });
 }

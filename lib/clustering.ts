@@ -127,8 +127,8 @@ export async function clusterUser(userId: string): Promise<number> {
     (item.embedding as string).slice(1, -1).split(",").map(Number)
   );
 
-  // DBSCAN: epsilon=0.4 (cosine distance ≈ similarity ≥ 0.6), minPts=3
-  const clusters = dbscan(vectors, 0.4, 3);
+  // DBSCAN: epsilon=0.55 (cosine distance ≈ similarity ≥ 0.45), minPts=3
+  const clusters = dbscan(vectors, 0.55, 3);
   if (clusters.length === 0) return 0;
 
   // Load user-renamed themes to preserve names across re-runs
