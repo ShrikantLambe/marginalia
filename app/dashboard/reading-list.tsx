@@ -738,48 +738,51 @@ export function ReadingList({ initialItems, initialThemes, userName }: {
         </div>
       </section>
 
-      {/* Themes section */}
-      {themes.length >= 2 && (
-        <section className="mb-8">
-          <div className="flex items-center justify-between mb-3">
-            <button
-              onClick={() => setThemesExpanded(v => !v)}
-              className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted hover:text-ink transition-colors flex items-center gap-2"
-            >
-              {themesExpanded ? "▴" : "▾"} Reading Themes · {themes.length}
-            </button>
-            <button
-              onClick={refreshThemes}
-              disabled={refreshingThemes}
-              className="font-mono text-[10px] tracking-[0.15em] uppercase text-muted hover:text-ink transition-colors disabled:opacity-40"
-            >
-              {refreshingThemes ? "Clustering…" : "Refresh"}
-            </button>
+      {/* Themes section — always visible so refresh is reachable */}
+      <section className="mb-8">
+        <div className="flex items-center justify-between mb-3">
+          <button
+            onClick={() => setThemesExpanded(v => !v)}
+            className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted hover:text-ink transition-colors flex items-center gap-2"
+          >
+            {themesExpanded ? "▴" : "▾"} Reading Themes{themes.length > 0 ? ` · ${themes.length}` : ""}
+          </button>
+          <button
+            onClick={refreshThemes}
+            disabled={refreshingThemes}
+            className="font-mono text-[10px] tracking-[0.15em] uppercase text-muted hover:text-ink transition-colors disabled:opacity-40"
+          >
+            {refreshingThemes ? "Clustering…" : themes.length === 0 ? "Generate" : "Refresh"}
+          </button>
+        </div>
+        {themeError && (
+          <p className="font-serif italic text-oxblood text-sm mb-3">{themeError}</p>
+        )}
+        {themesExpanded && themes.length === 0 && !refreshingThemes && (
+          <p className="font-serif italic text-ink/40 text-sm">
+            No themes yet — click Generate once you have 8+ indexed articles.
+          </p>
+        )}
+        {themesExpanded && themes.length > 0 && (
+          <div className="grid sm:grid-cols-2 gap-3">
+            {themes.map(theme => (
+              <ThemeCard
+                key={theme.id}
+                theme={theme}
+                active={activeThemeId === theme.id}
+                onClick={() => setActiveThemeId(activeThemeId === theme.id ? null : theme.id)}
+                onRename={(name) => renameTheme(theme.id, name)}
+              />
+            ))}
           </div>
-          {themeError && (
-            <p className="font-serif italic text-oxblood text-sm mb-3">{themeError}</p>
-          )}
-          {themesExpanded && (
-            <div className="grid sm:grid-cols-2 gap-3">
-              {themes.map(theme => (
-                <ThemeCard
-                  key={theme.id}
-                  theme={theme}
-                  active={activeThemeId === theme.id}
-                  onClick={() => setActiveThemeId(activeThemeId === theme.id ? null : theme.id)}
-                  onRename={(name) => renameTheme(theme.id, name)}
-                />
-              ))}
-            </div>
-          )}
-          {activeTheme && (
-            <div className="mt-3 flex items-center gap-2 font-mono text-[10px] tracking-[0.15em] uppercase text-oxblood">
-              <span>Filtered by: {activeTheme.name}</span>
-              <button onClick={() => setActiveThemeId(null)} className="text-muted hover:text-ink transition-colors">✕ clear</button>
-            </div>
-          )}
-        </section>
-      )}
+        )}
+        {activeTheme && (
+          <div className="mt-3 flex items-center gap-2 font-mono text-[10px] tracking-[0.15em] uppercase text-oxblood">
+            <span>Filtered by: {activeTheme.name}</span>
+            <button onClick={() => setActiveThemeId(null)} className="text-muted hover:text-ink transition-colors">✕ clear</button>
+          </div>
+        )}
+      </section>
 
       {/* Active tag filters */}
       {tagFilters.length > 0 && (
