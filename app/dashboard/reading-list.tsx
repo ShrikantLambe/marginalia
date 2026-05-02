@@ -497,6 +497,11 @@ export function ReadingList({ initialItems, userName }: {
         body: JSON.stringify({ url: url.trim() }),
       });
       const data = await res.json();
+      if (res.status === 409) {
+        setError("Already on your shelf.");
+        setUrl("");
+        return;
+      }
       if (!res.ok) throw new Error(data.error || "Something went wrong");
       setItems((prev) => [data, ...prev]);
       setUrl("");

@@ -47,6 +47,19 @@ export async function POST(req: Request) {
       .single();
 
     if (error) {
+      // Unique constraint violation — return the existing item instead
+      if (error.code === "23505") {
+        const { data: existing } = await supabase
+          .from("reading_list")
+          .select()
+          .eq("user_id", user.id)
+          .eq("url", url)
+          .single();
+        return NextResponse.json(
+          { duplicate: true, item: existing },
+          { status: 409 }
+        );
+      }
       console.error("[POST /api/items] supabase error:", JSON.stringify(error));
       return NextResponse.json({ error: error.message || JSON.stringify(error) }, { status: 500 });
     }
