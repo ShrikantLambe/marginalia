@@ -162,6 +162,8 @@ function Item({
   const [addingHighlight, setAddingHighlight] = useState(false);
   const [editingSummary, setEditingSummary] = useState(false);
   const [summaryValue, setSummaryValue] = useState(item.summary ?? "");
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
   const [editingTags, setEditingTags] = useState(false);
   const [newTag, setNewTag] = useState("");
 
@@ -185,6 +187,22 @@ function Item({
   async function saveNotes() {
     if (notesValue !== (item.notes ?? "")) {
       await onUpdate(item.id, { notes: notesValue || null });
+    }
+  }
+
+  async function retrySummary() {
+    setRetrying(true);
+    setRetryError(null);
+    try {
+      const res = await fetch(`/api/items/${item.id}/retry-summary`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) { setRetryError(data.error ?? "Failed"); return; }
+      onUpdate(item.id, data);
+      setSummaryValue(data.summary ?? "");
+    } catch {
+      setRetryError("Failed to retry summary");
+    } finally {
+      setRetrying(false);
     }
   }
 
@@ -277,6 +295,22 @@ function Item({
             {item.title || item.url}
           </a>
         </h2>
+
+        {/* Retry summary if missing */}
+        {!item.summary && !editingSummary && (
+          <div className="mb-4">
+            <button
+              onClick={retrySummary}
+              disabled={retrying}
+              className="font-mono text-[10px] tracking-[0.15em] uppercase text-oxblood hover:text-ink transition-colors disabled:opacity-40"
+            >
+              {retrying ? "Summarizing…" : "↻ Retry summary"}
+            </button>
+            {retryError && (
+              <span className="ml-3 font-serif italic text-oxblood text-sm">{retryError}</span>
+            )}
+          </div>
+        )}
 
         {/* Summary — click to edit */}
         {editingSummary ? (

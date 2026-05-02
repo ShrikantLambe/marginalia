@@ -3,6 +3,7 @@ import { stackServerApp } from "@/stack";
 import { supabase } from "@/lib/supabase";
 import { fetchAndSummarize } from "@/lib/summarize";
 import { embed, buildEmbeddingText, EMBEDDING_MODEL } from "@/lib/embeddings";
+import { checkDailyLimit, logUsage } from "@/lib/usage-log";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -24,8 +25,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
   }
 
+  const withinLimit = await checkDailyLimit(user.id);
+  if (!withinLimit) {
+    return NextResponse.json(
+      { error: "You've reached your daily limit of 100 AI operations. Try again tomorrow." },
+      { status: 429 }
+    );
+  }
+
   try {
     const { title, summary, tags } = await fetchAndSummarize(url);
+    await logUsage(user.id, "summarize");
 
     // Generate embedding — fail gracefully so a save is never lost
     let embeddingFields: Record<string, unknown> = {};
@@ -36,6 +46,7 @@ export async function POST(req: Request) {
         embedding_model: EMBEDDING_MODEL,
         embedded_at: new Date().toISOString(),
       };
+      await logUsage(user.id, "embed");
     } catch (e) {
       console.error("[POST /api/items] embedding failed, saving without:", e);
     }

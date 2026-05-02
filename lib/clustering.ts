@@ -1,6 +1,7 @@
 import "server-only";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { supabase } from "./supabase";
+import { logUsage } from "./usage-log";
 
 // ── Cosine distance ──────────────────────────────────────────────────────────
 
@@ -127,8 +128,20 @@ export async function clusterUser(userId: string): Promise<number> {
     (item.embedding as string).slice(1, -1).split(",").map(Number)
   );
 
-  // DBSCAN: epsilon=0.55 (cosine distance ≈ similarity ≥ 0.45), minPts=3
-  const clusters = dbscan(vectors, 0.55, 3);
+  // Adaptive epsilon: try increasing values until we get ≥ 2 clusters.
+  // Falls back to minPts=2 for small/diverse collections.
+  const EPSILONS = [0.4, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75];
+  let clusters: ReturnType<typeof dbscan> = [];
+  for (const eps of EPSILONS) {
+    clusters = dbscan(vectors, eps, 3);
+    if (clusters.length >= 2) break;
+  }
+  if (clusters.length < 2) {
+    for (const eps of EPSILONS) {
+      clusters = dbscan(vectors, eps, 2);
+      if (clusters.length >= 2) break;
+    }
+  }
   if (clusters.length === 0) return 0;
 
   // Load user-renamed themes to preserve names across re-runs
@@ -159,6 +172,7 @@ export async function clusterUser(userId: string): Promise<number> {
     } else {
       try {
         ({ name, description } = await nameCluster(clusterItems));
+        await logUsage(userId, "cluster-name").catch(() => {});
         await new Promise(r => setTimeout(r, 200)); // rate-limit Gemini
       } catch {
         name = `Theme (${clusterItems.length} articles)`;

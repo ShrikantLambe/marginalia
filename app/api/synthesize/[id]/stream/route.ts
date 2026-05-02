@@ -1,6 +1,7 @@
 import { stackServerApp } from "@/stack";
 import { supabase } from "@/lib/supabase";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { checkDailyLimit, logUsage } from "@/lib/usage-log";
 import type { Highlight } from "@/lib/supabase";
 
 export const runtime = "nodejs";
@@ -84,6 +85,14 @@ export async function GET(
 
   if (!synthesis) return new Response("Not found", { status: 404 });
 
+  // Check daily limit before generating
+  if (!synthesis.draft) {
+    const withinLimit = await checkDailyLimit(user.id);
+    if (!withinLimit) {
+      return new Response("Daily AI limit reached. Try again tomorrow.", { status: 429 });
+    }
+  }
+
   // Already generated — stream the cached draft
   if (synthesis.draft) {
     return new Response(synthesis.draft, {
@@ -115,11 +124,14 @@ export async function GET(
           fullText += text;
           controller.enqueue(enc.encode(text));
         }
-        // Persist completed draft
-        await supabase
-          .from("syntheses")
-          .update({ draft: fullText, title: extractTitle(fullText) })
-          .eq("id", id);
+        // Persist completed draft and log usage
+        await Promise.all([
+          supabase
+            .from("syntheses")
+            .update({ draft: fullText, title: extractTitle(fullText) })
+            .eq("id", id),
+          logUsage(user.id, "synthesize"),
+        ]);
       } finally {
         controller.close();
       }
