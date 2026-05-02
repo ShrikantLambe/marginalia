@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useUser, UserButton } from "@stackframe/stack";
 import type { ReadingItem, Highlight, SearchResult, ReadingTheme } from "@/lib/supabase";
 
@@ -141,6 +142,9 @@ function Item({
   onRemove,
   onTagClick,
   activeTagFilters,
+  selectMode,
+  selected,
+  onSelect,
 }: {
   item: ReadingItem;
   similarity?: number;
@@ -148,6 +152,9 @@ function Item({
   onRemove: (id: string) => void;
   onTagClick: (tag: string) => void;
   activeTagFilters: string[];
+  selectMode: boolean;
+  selected: boolean;
+  onSelect: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [notesValue, setNotesValue] = useState(item.notes ?? "");
@@ -214,8 +221,21 @@ function Item({
   }
 
   return (
-    <li className="group">
-      <article className="border-b border-rule pb-10">
+    <li className={`group ${selectMode && selected ? "opacity-100" : selectMode ? "opacity-70" : ""}`}>
+      <article
+        className={`border-b border-rule pb-10 ${selectMode ? "cursor-pointer" : ""}`}
+        onClick={selectMode ? onSelect : undefined}
+      >
+        {selectMode && (
+          <div className="flex items-center gap-2 mb-3">
+            <div className={`w-4 h-4 border flex items-center justify-center transition-colors ${selected ? "bg-oxblood border-oxblood" : "border-rule"}`}>
+              {selected && <span className="text-paper text-[10px] leading-none">✓</span>}
+            </div>
+            <span className="font-mono text-[10px] tracking-[0.15em] uppercase text-muted">
+              {selected ? "Selected" : "Select"}
+            </span>
+          </div>
+        )}
         {/* Metadata row */}
         <div className="flex items-center justify-between mb-3 font-mono text-[10px] tracking-[0.18em] uppercase text-muted">
           <span className="flex items-center gap-2">
@@ -456,6 +476,11 @@ export function ReadingList({ initialItems, initialThemes, userName }: {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [backfillStatus, setBackfillStatus] = useState<string | null>(null);
+  const router = useRouter();
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [angle, setAngle] = useState("");
+  const [drafting, setDrafting] = useState(false);
   const [themes, setThemes] = useState<ReadingTheme[]>(initialThemes);
   const [activeThemeId, setActiveThemeId] = useState<string | null>(null);
   const [themesExpanded, setThemesExpanded] = useState(initialThemes.length >= 2);
@@ -611,6 +636,33 @@ export function ReadingList({ initialItems, initialThemes, userName }: {
     localStorage.setItem("marginalia_dismissed", JSON.stringify(next));
   }
 
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) { next.delete(id); return next; }
+      if (next.size >= 8) return prev;
+      next.add(id);
+      return next;
+    });
+  }
+
+  async function startDraft() {
+    if (selectedIds.size < 2) return;
+    setDrafting(true);
+    try {
+      const res = await fetch("/api/synthesize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item_ids: [...selectedIds], angle: angle || undefined }),
+      });
+      const json = await res.json();
+      if (!res.ok) { alert(json.error); return; }
+      router.push(`/synthesis/${json.id}`);
+    } finally {
+      setDrafting(false);
+    }
+  }
+
   async function refreshThemes() {
     setRefreshingThemes(true);
     setThemeError(null);
@@ -672,6 +724,9 @@ export function ReadingList({ initialItems, initialThemes, userName }: {
         </div>
         <div className="flex items-center gap-4">
           <span className="font-serif italic text-ink/60 text-sm hidden sm:inline">for {userName}</span>
+          <a href="/synthesis" className="font-mono text-[10px] tracking-[0.15em] uppercase text-muted hover:text-ink transition-colors">
+            Drafts
+          </a>
           <button
             onClick={runBackfill}
             disabled={backfillStatus === "Indexing…"}
@@ -806,7 +861,7 @@ export function ReadingList({ initialItems, initialThemes, userName }: {
 
       {/* Filter tabs — hidden during search */}
       {!isSearching && (
-        <div className="flex flex-wrap gap-x-1 gap-y-1 mb-8 border-b border-rule pb-4">
+        <div className="flex flex-wrap gap-x-1 gap-y-1 mb-8 border-b border-rule pb-4 items-center">
           {TABS.map(({ key, label, count }) => (
             <button
               key={key}
@@ -818,6 +873,14 @@ export function ReadingList({ initialItems, initialThemes, userName }: {
               {label} · {count}
             </button>
           ))}
+          <button
+            onClick={() => { setSelectMode(v => !v); setSelectedIds(new Set()); }}
+            className={`ml-auto font-mono text-[10px] tracking-[0.15em] uppercase px-3 py-1.5 transition-colors ${
+              selectMode ? "bg-oxblood text-paper" : "text-muted hover:text-ink"
+            }`}
+          >
+            {selectMode ? "Cancel" : "Select for draft"}
+          </button>
         </div>
       )}
 
@@ -854,6 +917,9 @@ export function ReadingList({ initialItems, initialThemes, userName }: {
               onRemove={removeItem}
               onTagClick={toggleTagFilter}
               activeTagFilters={tagFilters}
+              selectMode={selectMode}
+              selected={selectedIds.has(item.id)}
+              onSelect={() => toggleSelect(item.id)}
             />
           ))}
         </ol>
@@ -862,6 +928,31 @@ export function ReadingList({ initialItems, initialThemes, userName }: {
       <footer className="mt-20 pt-6 border-t border-rule font-mono text-[10px] tracking-[0.18em] uppercase text-muted text-center">
         {counts.all} {counts.all === 1 ? "entry" : "entries"} on the shelf
       </footer>
+
+      {/* Floating synthesis action bar */}
+      {selectMode && selectedIds.size >= 2 && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-paper border-t border-rule px-6 py-4">
+          <div className="mx-auto max-w-3xl flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <span className="font-mono text-[10px] tracking-[0.15em] uppercase text-muted flex-shrink-0">
+              {selectedIds.size} / 8 selected
+            </span>
+            <input
+              type="text"
+              value={angle}
+              onChange={e => setAngle(e.target.value)}
+              placeholder="Optional focus — e.g. 'write for executives'"
+              className="flex-1 bg-transparent border-b border-rule focus:border-oxblood outline-none px-1 py-1 font-serif text-base placeholder:text-muted/50 transition-colors"
+            />
+            <button
+              onClick={startDraft}
+              disabled={drafting}
+              className="bg-oxblood text-paper px-6 py-2 font-mono text-xs tracking-[0.18em] uppercase hover:bg-ink transition-colors disabled:opacity-40 flex-shrink-0"
+            >
+              {drafting ? "Creating…" : `Draft from these (${selectedIds.size})`}
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

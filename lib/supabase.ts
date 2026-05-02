@@ -31,6 +31,16 @@ export type ReadingItem = {
 
 export type SearchResult = ReadingItem & { similarity: number };
 
+export type Synthesis = {
+  id: string;
+  user_id: string;
+  title: string | null;
+  prompt: string | null;
+  draft: string;
+  source_item_ids: string[];
+  created_at: string;
+};
+
 export type ReadingTheme = {
   id: string;
   user_id: string;
