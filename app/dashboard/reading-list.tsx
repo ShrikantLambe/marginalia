@@ -680,7 +680,7 @@ export function ReadingList({ initialItems, userName }: {
           ) : searchResults !== null && (
             <span className="text-muted">
               {searchResults.length === 0
-                ? "No results above 40% match"
+                ? "No results above 50% match — try rephrasing"
                 : `${searchResults.length} result${searchResults.length > 1 ? "s" : ""} · semantic search`}
             </span>
           )}
