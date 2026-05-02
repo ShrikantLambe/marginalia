@@ -1,4 +1,5 @@
 -- Phase 6: editorial annotations
+-- Prerequisite: 008_usage_log.sql
 -- Run in Supabase SQL Editor after 008_usage_log.sql
 
 alter table reading_list

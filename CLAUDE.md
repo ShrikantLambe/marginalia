@@ -11,11 +11,11 @@ npm run lint      # ESLint via next lint
 npm run start     # serve the production build
 ```
 
-There is no test suite.
+No test suite exists.
 
 ## Environment setup
 
-Copy `.env.example` to `.env.local` and fill in all 7 variables before running locally:
+Copy `.env.example` to `.env.local` and fill in all variables:
 
 | Variable | Source |
 |---|---|
@@ -23,37 +23,88 @@ Copy `.env.example` to `.env.local` and fill in all 7 variables before running l
 | `NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY` | Stack Auth dashboard → API Keys |
 | `STACK_SECRET_SERVER_KEY` | Stack Auth dashboard → API Keys |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Project Settings → API |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API (service_role secret) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API (service_role secret, not anon) |
 | `GEMINI_API_KEY` | https://aistudio.google.com/apikey |
 
-Also add `http://localhost:3000` under **Domains & Handlers** in the Stack Auth dashboard, or sign-in callbacks will fail locally.
+Add `http://localhost:3000` under **Domains & Handlers** in Stack Auth dashboard for local dev.
 
 ## Architecture
 
+**Stack:** Next.js 15 (App Router), Stack Auth, Supabase Postgres + pgvector, Gemini API, Vercel.
+
 **Request flow for saving a URL:**
 ```
-Browser → POST /api/items
-  → stackServerApp.getUser()          (Stack Auth, server-side)
-  → fetchAndSummarize(url)            (lib/summarize.ts)
-      → fetch URL with JSDOM + Readability (extract article text)
-      → Gemini 2.5 Flash              (generate TL;DR + tags)
-  → supabase.from("reading_list").insert(...)
+POST /api/items
+  → fetchAndSummarize()       (fetch URL → Readability → Gemini 2.5 Flash)
+  → checkAndLog()             (atomic daily limit check + usage log)
+  → embed()                   (Gemini embedding-001, 768d, fire-and-forget on failure)
+  → supabase.insert()
+  → generateEditorialNote()   (fire-and-forget, updates row after response)
 ```
 
-**Server / client split in the dashboard:**
-- [app/dashboard/page.tsx](app/dashboard/page.tsx) — Next.js Server Component; authenticates the user via Stack Auth and fetches their rows from Supabase, then passes them as props.
-- [app/dashboard/reading-list.tsx](app/dashboard/reading-list.tsx) — `"use client"` component; owns all interactive state (URL input, optimistic add/remove, loading/error).
+**Server / client split in dashboard:**
+- [app/dashboard/page.tsx](app/dashboard/page.tsx) — Server Component; authenticates, fetches items + themes
+- [app/dashboard/reading-list.tsx](app/dashboard/reading-list.tsx) — `"use client"`; all interactive state
 
-**API routes** ([app/api/items/](app/api/items/)):
-- `POST /api/items` — validates URL, calls `fetchAndSummarize`, inserts row. Explicitly set to `runtime = "nodejs"` because `jsdom` does not run in the Edge runtime.
-- `DELETE /api/items/[id]` — removes a row (auth checked server-side).
+## API Routes
 
-**Gemini prompt contract** ([lib/summarize.ts](lib/summarize.ts)): the model is asked to output a TL;DR followed by a line containing only `---TAGS---`, followed by comma-separated tags. The parser splits on that separator. If you change the prompt, preserve this contract or update the parser.
+| Route | Method | Purpose |
+|---|---|---|
+| `/api/items` | POST | Save URL: fetch + summarize + embed + editorial note |
+| `/api/items/[id]` | PATCH, DELETE | Update fields (status/notes/tags/summary triggers re-embed); delete |
+| `/api/items/[id]/open` | POST | Beacon: update last_opened_at |
+| `/api/items/[id]/retry-summary` | POST | Re-summarize + re-embed a failed item |
+| `/api/items/[id]/annotate` | POST | Regenerate editorial annotation |
+| `/api/items/backfill-embeddings` | POST | Embed all items missing embeddings |
+| `/api/items/backfill-annotations` | POST | Annotate up to 5 items missing editorial notes |
+| `/api/search` | POST | Semantic search via pgvector cosine similarity |
+| `/api/themes` | GET, POST | Get themes; POST triggers re-clustering (rate-limited 1/hr) |
+| `/api/themes/[id]` | PATCH | Rename a theme (sets user_renamed=true) |
+| `/api/synthesize` | POST | Create synthesis row, return id |
+| `/api/synthesize/[id]/stream` | GET | Stream Gemini draft, save to DB on completion |
+| `/api/synthesize/[id]` | PATCH | Update draft/title |
+| `/api/syntheses` | GET | List past syntheses |
+| `/api/cron/cluster` | GET | Daily cron: cluster all users (requires CRON_SECRET header) |
+| `/api/debug` | GET | Health check: embed test, item counts, RPC test |
+| `/api/debug/clustering` | GET | Show pairwise similarity stats + cluster counts at various epsilons |
 
-**Supabase** ([lib/supabase.ts](lib/supabase.ts)): uses the `service_role` key server-side only (never sent to the browser). No Row Level Security is configured — all access is gated by Stack Auth in the API routes. The `reading_list` table schema lives in [supabase/schema.sql](supabase/schema.sql) and must be run manually in the Supabase SQL editor once per project.
+## Key Libraries
 
-**Auth** ([stack.ts](stack.ts)): `stackServerApp` is the server-side Stack Auth singleton. Sign-in/sign-up pages are served by the catch-all route at `app/handler/[...stack]/page.tsx` (Stack Auth's hosted UI). After auth, users land on `/dashboard`.
+- [lib/supabase.ts](lib/supabase.ts) — singleton Supabase client + all TypeScript types
+- [lib/embeddings.ts](lib/embeddings.ts) — `embed()` (Gemini REST v1beta, key in header not URL), `parseEmbedding()` (validated parse), `buildEmbeddingText()`
+- [lib/summarize.ts](lib/summarize.ts) — `fetchAndSummarize()`: fetch → Readability → Gemini; Gemini prompt contract: TL;DR then `---TAGS---` separator
+- [lib/clustering.ts](lib/clustering.ts) — DBSCAN (adaptive epsilon 0.4→0.75) with k-means fallback; `clusterUser()` entry point
+- [lib/editorial.ts](lib/editorial.ts) — `generateEditorialNote()`: one-sentence annotation from last 20 articles
+- [lib/usage-log.ts](lib/usage-log.ts) — `checkAndLog()` (atomic check+insert via Postgres RPC); 150 ops/day limit
+- [lib/rate-limit.ts](lib/rate-limit.ts) — in-process soft rate limiter (per-user per-endpoint)
+
+## Database
+
+**Schema lives in [supabase/migrations/](supabase/migrations/).** Run migrations in numbered order in Supabase SQL Editor.
+
+| Migration | Contents |
+|---|---|
+| 001 | reading_list base schema, RLS disabled |
+| 002 | Phase 1: status, notes, highlights, rating, read_at, last_opened_at |
+| 003 | Phase 2: pgvector extension, embedding column, HNSW index, match_reading_list RPC |
+| 004 | Fix RPC overload conflict (text param vs vector param) |
+| 005 | Unique constraint: (user_id, url) |
+| 006 | Phase 3: reading_themes table |
+| 007 | Phase 4: syntheses table, RLS disabled |
+| 008 | usage_log table, RLS disabled |
+| 009 | Phase 6: editorial_note, editorial_references, editorial_generated_at columns |
+| 010 | check_and_log_usage Postgres RPC (atomic daily limit) |
+
+**Supabase client** uses `service_role` key server-side only — bypasses RLS. All tables have RLS explicitly disabled. Never send `SUPABASE_SERVICE_ROLE_KEY` to the client.
+
+**Gemini prompt contract in summarize.ts:** output must contain `---TAGS---` separator. Parser splits on this; changing the prompt without updating the parser breaks tag extraction silently.
 
 ## Styling
 
-Design tokens are in [tailwind.config.ts](tailwind.config.ts) (`paper`, `ink`, `oxblood`, `sage`, `muted`, `rule` colors) and [app/globals.css](app/globals.css). The editorial aesthetic (Crimson Pro serif font, drop-cap on `.summary::first-letter`, monospace metadata lines) is intentional. New UI should follow this palette.
+Design tokens: [tailwind.config.ts](tailwind.config.ts) (`paper`, `ink`, `oxblood`, `sage`, `rule`, `muted`). Full design system in [DESIGN.md](DESIGN.md). Six colors, five serif sizes, one mono size — no additions.
+
+## Known Issues / Debt
+
+- Themes clustering rarely triggers for small (<15 items) diverse collections — k-means fallback helps but themes need enough same-topic articles to be meaningful.
+- Rate limiter (`lib/rate-limit.ts`) is in-process only — resets per serverless cold start. Replace with Upstash Redis for multi-instance production.
+- `CRON_SECRET` must be set in Vercel env vars for the daily clustering cron to authenticate.

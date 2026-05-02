@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { stackServerApp } from "@/stack";
 import { supabase } from "@/lib/supabase";
 import { embed } from "@/lib/embeddings";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -11,6 +12,11 @@ export async function POST(req: Request) {
   const user = await stackServerApp.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // 20 searches per minute per user
+  if (!rateLimit(`search:${user.id}`, 20)) {
+    return NextResponse.json({ error: "Too many searches. Wait a moment." }, { status: 429 });
   }
 
   const body = await req.json().catch(() => ({}));

@@ -2,12 +2,11 @@ import { NextResponse } from "next/server";
 import { stackServerApp } from "@/stack";
 import { supabase } from "@/lib/supabase";
 import { generateEditorialNote } from "@/lib/editorial";
-import { checkDailyLimit, logUsage } from "@/lib/usage-log";
+import { checkAndLog } from "@/lib/usage-log";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// Lazy backfill: annotate up to 5 visible items missing editorial notes
 export async function POST(req: Request) {
   const user = await stackServerApp.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -19,9 +18,6 @@ export async function POST(req: Request) {
   let processed = 0;
 
   for (const id of itemIds) {
-    const withinLimit = await checkDailyLimit(user.id);
-    if (!withinLimit) break;
-
     const { data: item } = await supabase
       .from("reading_list")
       .select("title, summary, editorial_note")
@@ -29,7 +25,11 @@ export async function POST(req: Request) {
       .eq("user_id", user.id)
       .single();
 
-    if (!item || item.editorial_note) continue; // already has one
+    if (!item || item.editorial_note) continue;
+
+    // Atomic check+log — stops loop if limit reached
+    const allowed = await checkAndLog(user.id, "editorial-note");
+    if (!allowed) break;
 
     const annotation = await generateEditorialNote(user.id, id, item.title, item.summary);
     if (!annotation) continue;
@@ -40,9 +40,8 @@ export async function POST(req: Request) {
       editorial_generated_at: new Date().toISOString(),
     }).eq("id", id);
 
-    await logUsage(user.id, "editorial-note");
     processed++;
-    await new Promise(r => setTimeout(r, 150)); // rate-limit Gemini
+    await new Promise(r => setTimeout(r, 150));
   }
 
   return NextResponse.json({ processed });

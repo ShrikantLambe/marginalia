@@ -1,4 +1,5 @@
 -- Phase 4: synthesis drafts
+-- Prerequisite: 006_phase_3_themes.sql
 -- Run in Supabase SQL Editor after 006_phase_3_themes.sql
 
 create table if not exists syntheses (

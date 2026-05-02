@@ -2,6 +2,7 @@ import "server-only";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { supabase } from "./supabase";
 import { logUsage } from "./usage-log";
+import { parseEmbedding } from "./embeddings";
 
 // ── Cosine distance ──────────────────────────────────────────────────────────
 
@@ -164,11 +165,14 @@ export async function clusterUser(userId: string): Promise<number> {
     .gte("created_at", since);
 
   if (!items || items.length < 8) return 0;
+  // Cap at 200 to avoid O(n²) DBSCAN timing out the cron (60s limit)
+  // Take the most recent 200 if over the cap
+  if (items.length > 200) items.splice(0, items.length - 200);
 
-  // Parse embedding strings to number arrays
-  const vectors = items.map(item =>
-    (item.embedding as string).slice(1, -1).split(",").map(Number)
-  );
+  // Parse and validate embedding vectors — drop items with malformed embeddings
+  const validItems = items.filter(item => parseEmbedding(item.embedding) !== null);
+  if (validItems.length < 8) return 0;
+  const vectors = validItems.map(item => parseEmbedding(item.embedding)!);
 
   // 1. Try DBSCAN with adaptive epsilon (works well for diverse collections)
   const EPSILONS = [0.4, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75];
@@ -205,7 +209,7 @@ export async function clusterUser(userId: string): Promise<number> {
   // Build theme rows
   const rows = [];
   for (const cluster of clusters) {
-    const clusterItems = cluster.indices.map(i => items[i]);
+    const clusterItems = cluster.indices.map(i => validItems[i]);
     const clusterIds = clusterItems.map(i => i.id as string);
 
     // Reuse a user-renamed name if >50% overlap with an existing theme

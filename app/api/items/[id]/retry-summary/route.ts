@@ -3,10 +3,10 @@ import { stackServerApp } from "@/stack";
 import { supabase } from "@/lib/supabase";
 import { fetchAndSummarize } from "@/lib/summarize";
 import { embed, buildEmbeddingText, EMBEDDING_MODEL } from "@/lib/embeddings";
-import { checkDailyLimit, logUsage } from "@/lib/usage-log";
+import { checkAndLog, logUsage } from "@/lib/usage-log";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function POST(
   _req: Request,
@@ -14,14 +14,6 @@ export async function POST(
 ) {
   const user = await stackServerApp.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const withinLimit = await checkDailyLimit(user.id);
-  if (!withinLimit) {
-    return NextResponse.json(
-      { error: "Daily AI limit reached. Try again tomorrow." },
-      { status: 429 }
-    );
-  }
 
   const { id } = await params;
 
@@ -36,7 +28,11 @@ export async function POST(
 
   try {
     const { title, summary, tags } = await fetchAndSummarize(item.url);
-    await logUsage(user.id, "summarize");
+
+    const allowed = await checkAndLog(user.id, "summarize");
+    if (!allowed) {
+      return NextResponse.json({ error: "Daily AI limit reached. Try again tomorrow." }, { status: 429 });
+    }
 
     const updates: Record<string, unknown> = { title, summary, tags };
 

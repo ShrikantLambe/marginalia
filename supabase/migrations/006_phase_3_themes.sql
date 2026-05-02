@@ -1,4 +1,5 @@
 -- Phase 3: reading themes via DBSCAN clustering
+-- Prerequisite: 005_unique_url_per_user.sql
 -- Run in Supabase SQL Editor after 005_unique_url_per_user.sql
 
 create extension if not exists vector;

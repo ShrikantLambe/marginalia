@@ -1,4 +1,5 @@
 -- Fix: drop conflicting match_reading_list overloads (one with vector param,
+-- Prerequisite: 003_phase_2_embeddings.sql
 -- one with text param) and recreate with a single text-param version.
 -- The embedding column stays vector(768) — we truncate via outputDimensionality
 -- in the API call so the schema needs no changes.

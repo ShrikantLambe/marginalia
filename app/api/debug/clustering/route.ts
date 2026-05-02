@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { stackServerApp } from "@/stack";
 import { supabase } from "@/lib/supabase";
 import { dbscan } from "@/lib/clustering";
+import { parseEmbedding } from "@/lib/embeddings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,7 +28,9 @@ export async function GET() {
 
   if (!items?.length) return NextResponse.json({ error: "No indexed items" });
 
-  const vectors = items.map(i => (i.embedding as string).slice(1, -1).split(",").map(Number));
+  const rawVectors = items.map(i => parseEmbedding(i.embedding));
+  const valid = items.filter((_, idx) => rawVectors[idx] !== null);
+  const vectors = rawVectors.filter((v): v is number[] => v !== null);
   const n = vectors.length;
 
   // All pairwise distances

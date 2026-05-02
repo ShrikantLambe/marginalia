@@ -1,4 +1,5 @@
 -- Cross-cutting: Gemini API usage tracking and daily rate limiting
+-- Prerequisite: 007_phase_4_syntheses.sql
 -- Run in Supabase SQL Editor
 
 create table if not exists usage_log (

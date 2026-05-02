@@ -3,11 +3,12 @@ import { stackServerApp } from "@/stack";
 import { supabase } from "@/lib/supabase";
 import { fetchAndSummarize } from "@/lib/summarize";
 import { embed, buildEmbeddingText, EMBEDDING_MODEL } from "@/lib/embeddings";
-import { checkDailyLimit, logUsage } from "@/lib/usage-log";
+import { checkAndLog, logUsage } from "@/lib/usage-log";
 import { generateEditorialNote } from "@/lib/editorial";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
   const user = await stackServerApp.getUser();
@@ -20,17 +21,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
   }
 
-  const withinLimit = await checkDailyLimit(user.id);
-  if (!withinLimit) {
-    return NextResponse.json(
-      { error: "You've reached your daily limit of 150 AI operations. Try again tomorrow." },
-      { status: 429 }
-    );
+  // 10 saves per minute per user (each triggers a full Gemini pipeline)
+  if (!rateLimit(`save:${user.id}`, 10)) {
+    return NextResponse.json({ error: "Too many saves. Wait a moment." }, { status: 429 });
   }
 
   try {
     const { title, summary, tags } = await fetchAndSummarize(url);
-    await logUsage(user.id, "summarize");
+    const allowed = await checkAndLog(user.id, "summarize");
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "You've reached your daily limit of 150 AI operations. Try again tomorrow." },
+        { status: 429 }
+      );
+    }
 
     // Embedding — fail gracefully, never block the save
     const embeddingFields: Record<string, unknown> = {};
@@ -61,16 +65,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Editorial annotation — fire-and-forget, never blocks the response
-    generateEditorialNote(user.id, savedItem.id, title, summary)
-      .then(async (annotation) => {
+    // Editorial annotation — fire-and-forget, never blocks the response.
+    // Checks limit before firing so annotation doesn't silently exceed quota.
+    checkAndLog(user.id, "editorial-note")
+      .then(async (allowed) => {
+        if (!allowed) return;
+        const annotation = await generateEditorialNote(user.id, savedItem.id, title, summary);
         if (!annotation) return;
         await supabase.from("reading_list").update({
           editorial_note: annotation.note,
           editorial_references: annotation.references,
           editorial_generated_at: new Date().toISOString(),
         }).eq("id", savedItem.id);
-        await logUsage(user.id, "editorial-note");
       })
       .catch(() => {});
 

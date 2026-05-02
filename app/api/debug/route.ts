@@ -14,7 +14,8 @@ export async function GET() {
   // 0. List available embedding models
   try {
     const listRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${process.env.GEMINI_API_KEY}`
+      "https://generativelanguage.googleapis.com/v1beta/models",
+      { headers: { "x-goog-api-key": process.env.GEMINI_API_KEY ?? "" } }
     );
     const listData = await listRes.json();
     const embeddingModels = (listData.models ?? [])

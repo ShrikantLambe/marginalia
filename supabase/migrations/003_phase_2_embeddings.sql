@@ -1,4 +1,5 @@
 -- Phase 2: semantic search via pgvector
+-- Prerequisite: 002_phase_1_status_notes.sql
 -- Run in Supabase SQL Editor after 002_phase_1_status_notes.sql
 
 create extension if not exists vector;

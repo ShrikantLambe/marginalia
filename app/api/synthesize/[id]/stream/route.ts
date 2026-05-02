@@ -1,11 +1,11 @@
 import { stackServerApp } from "@/stack";
 import { supabase } from "@/lib/supabase";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { checkDailyLimit, logUsage } from "@/lib/usage-log";
+import { checkAndLog, logUsage } from "@/lib/usage-log";
 import type { Highlight } from "@/lib/supabase";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 export const dynamic = "force-dynamic";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
@@ -85,10 +85,10 @@ export async function GET(
 
   if (!synthesis) return new Response("Not found", { status: 404 });
 
-  // Check daily limit before generating
+  // Check daily limit atomically before generating (only when not already cached)
   if (!synthesis.draft) {
-    const withinLimit = await checkDailyLimit(user.id);
-    if (!withinLimit) {
+    const allowed = await checkAndLog(user.id, "synthesize");
+    if (!allowed) {
       return new Response("Daily AI limit reached. Try again tomorrow.", { status: 429 });
     }
   }
@@ -124,14 +124,17 @@ export async function GET(
           fullText += text;
           controller.enqueue(enc.encode(text));
         }
-        // Persist completed draft and log usage
-        await Promise.all([
-          supabase
+        // Only persist if we got a meaningful draft (guards against disconnects/truncation)
+        if (fullText.length >= 100) {
+          await supabase
             .from("syntheses")
             .update({ draft: fullText, title: extractTitle(fullText) })
-            .eq("id", id),
-          logUsage(user.id, "synthesize"),
-        ]);
+            .eq("id", id);
+        } else {
+          console.error(`[stream] synthesis ${id} produced only ${fullText.length} chars — not persisting`);
+        }
+      } catch (e) {
+        console.error(`[stream] synthesis ${id} failed:`, e instanceof Error ? e.message : String(e));
       } finally {
         controller.close();
       }

@@ -1,4 +1,5 @@
 -- Phase 1: status, notes, highlights, rating, read_at, last_opened_at
+-- Prerequisite: 001_phase_0_initial.sql
 -- Run in Supabase SQL Editor after 001_phase_0_initial.sql
 
 alter table reading_list

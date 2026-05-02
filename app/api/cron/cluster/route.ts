@@ -6,8 +6,13 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function GET(req: Request) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    console.error("[cron/cluster] CRON_SECRET is not set — rejecting request");
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const auth = req.headers.get("authorization");
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (auth !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

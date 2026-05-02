@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { stackServerApp } from "@/stack";
 import { supabase } from "@/lib/supabase";
 import { generateEditorialNote } from "@/lib/editorial";
-import { checkDailyLimit, logUsage } from "@/lib/usage-log";
+import { checkAndLog } from "@/lib/usage-log";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -14,11 +14,6 @@ export async function POST(
   const user = await stackServerApp.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const withinLimit = await checkDailyLimit(user.id);
-  if (!withinLimit) {
-    return NextResponse.json({ error: "Daily AI limit reached. Try again tomorrow." }, { status: 429 });
-  }
-
   const { id } = await params;
   const { data: item } = await supabase
     .from("reading_list")
@@ -28,6 +23,11 @@ export async function POST(
     .single();
 
   if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const allowed = await checkAndLog(user.id, "editorial-note");
+  if (!allowed) {
+    return NextResponse.json({ error: "Daily AI limit reached. Try again tomorrow." }, { status: 429 });
+  }
 
   const annotation = await generateEditorialNote(user.id, id, item.title, item.summary);
   if (!annotation) return NextResponse.json({ error: "Could not generate annotation" }, { status: 500 });
@@ -45,6 +45,5 @@ export async function POST(
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await logUsage(user.id, "editorial-note");
   return NextResponse.json(data);
 }
