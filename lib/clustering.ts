@@ -27,6 +27,48 @@ function meanVector(vecs: number[][]): number[] {
 
 type Cluster = { indices: number[]; centroid: number[] };
 
+// ── k-means (fallback for focused collections where DBSCAN finds 1 cluster) ──
+
+function kmeans(vectors: number[][], k: number, maxIter = 50): Cluster[] {
+  const n = vectors.length;
+  // k-means++ init: first centroid random, remaining chosen by max distance
+  const centroids: number[][] = [vectors[Math.floor(Math.random() * n)]];
+  while (centroids.length < k) {
+    let maxD = -1, pick = 0;
+    for (let i = 0; i < n; i++) {
+      const d = Math.min(...centroids.map(c => cosineDistance(vectors[i], c)));
+      if (d > maxD) { maxD = d; pick = i; }
+    }
+    centroids.push([...vectors[pick]]);
+  }
+
+  let labels = new Array<number>(n).fill(0);
+  for (let iter = 0; iter < maxIter; iter++) {
+    const next = vectors.map(v => {
+      let best = 0, bestD = Infinity;
+      for (let c = 0; c < k; c++) {
+        const d = cosineDistance(v, centroids[c]);
+        if (d < bestD) { bestD = d; best = c; }
+      }
+      return best;
+    });
+    if (next.every((l, i) => l === labels[i])) break;
+    labels = next;
+    for (let c = 0; c < k; c++) {
+      const pts = vectors.filter((_, i) => labels[i] === c);
+      if (pts.length > 0) centroids[c] = meanVector(pts);
+    }
+  }
+
+  const clusters: Cluster[] = [];
+  for (let c = 0; c < k; c++) {
+    const indices = labels.reduce<number[]>((acc, l, i) => l === c ? [...acc, i] : acc, []);
+    if (indices.length >= 2)
+      clusters.push({ indices, centroid: centroids[c] });
+  }
+  return clusters;
+}
+
 export function dbscan(
   points: number[][],
   epsilon: number,
@@ -128,10 +170,9 @@ export async function clusterUser(userId: string): Promise<number> {
     (item.embedding as string).slice(1, -1).split(",").map(Number)
   );
 
-  // Adaptive epsilon: try increasing values until we get ≥ 2 clusters.
-  // Falls back to minPts=2 for small/diverse collections.
+  // 1. Try DBSCAN with adaptive epsilon (works well for diverse collections)
   const EPSILONS = [0.4, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75];
-  let clusters: ReturnType<typeof dbscan> = [];
+  let clusters: Cluster[] = [];
   for (const eps of EPSILONS) {
     clusters = dbscan(vectors, eps, 3);
     if (clusters.length >= 2) break;
@@ -142,6 +183,14 @@ export async function clusterUser(userId: string): Promise<number> {
       if (clusters.length >= 2) break;
     }
   }
+
+  // 2. DBSCAN found ≤1 cluster — collection is focused on one domain.
+  //    Use k-means to discover sub-themes within it.
+  if (clusters.length < 2) {
+    const k = Math.max(2, Math.min(5, Math.round(items.length / 4)));
+    clusters = kmeans(vectors, k);
+  }
+
   if (clusters.length === 0) return 0;
 
   // Load user-renamed themes to preserve names across re-runs
