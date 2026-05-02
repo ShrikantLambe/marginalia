@@ -21,3 +21,8 @@ create index if not exists reading_list_user_id_idx
 
 create index if not exists reading_list_user_created_idx
   on reading_list(user_id, created_at desc);
+
+-- All access goes through server-side API routes using the service_role key,
+-- which bypasses RLS anyway. Disable explicitly so anon-key misconfiguration
+-- fails loudly rather than silently blocking writes.
+alter table reading_list disable row level security;
