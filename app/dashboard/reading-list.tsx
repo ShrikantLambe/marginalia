@@ -164,6 +164,7 @@ function Item({
   const [summaryValue, setSummaryValue] = useState(item.summary ?? "");
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
+  const [annotating, setAnnotating] = useState(false);
   const [editingTags, setEditingTags] = useState(false);
   const [newTag, setNewTag] = useState("");
 
@@ -187,6 +188,19 @@ function Item({
   async function saveNotes() {
     if (notesValue !== (item.notes ?? "")) {
       await onUpdate(item.id, { notes: notesValue || null });
+    }
+  }
+
+  async function reAnnotate() {
+    setAnnotating(true);
+    try {
+      const res = await fetch(`/api/items/${item.id}/annotate`, { method: "POST" });
+      if (res.ok) {
+        const updated = await res.json();
+        onUpdate(item.id, updated);
+      }
+    } finally {
+      setAnnotating(false);
     }
   }
 
@@ -332,6 +346,25 @@ function Item({
               {item.summary}
             </p>
           )
+        )}
+
+        {/* Editorial annotation */}
+        {item.editorial_note && (
+          <div className="flex gap-3 mb-4 mt-1">
+            <div className="w-px bg-oxblood/60 flex-shrink-0 mt-1 mb-1" />
+            <div className="flex-1">
+              <p className="font-serif italic text-[14px] leading-relaxed text-ink/70">
+                {item.editorial_note}
+              </p>
+              <button
+                onClick={reAnnotate}
+                disabled={annotating}
+                className="mt-1 font-mono text-[10px] tracking-[0.12em] uppercase text-muted hover:text-ink transition-colors disabled:opacity-40"
+              >
+                {annotating ? "…" : "↻"}
+              </button>
+            </div>
+          </div>
         )}
 
         {/* Tags */}
@@ -526,6 +559,22 @@ export function ReadingList({ initialItems, initialThemes, userName }: {
     try { return JSON.parse(localStorage.getItem("marginalia_dismissed") ?? "{}"); }
     catch { return {}; }
   });
+
+  // Lazy backfill: fire-and-forget for items missing editorial notes.
+  // Annotations appear on the next page load.
+  useEffect(() => {
+    const missing = items
+      .filter(i => !i.editorial_note && i.summary)
+      .slice(0, 5)
+      .map(i => i.id);
+    if (!missing.length) return;
+    fetch("/api/items/backfill-annotations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ item_ids: missing }),
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Debounced search
   useEffect(() => {
@@ -752,7 +801,7 @@ export function ReadingList({ initialItems, initialThemes, userName }: {
       <header className="flex items-center justify-between border-b border-rule pb-6 mb-10">
         <div>
           <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted mb-1">The Reading Room</div>
-          <h1 className="font-serif text-3xl md:text-4xl font-semibold tracking-tight">
+          <h1 className="font-serif text-xl md:text-2xl font-semibold tracking-tight">
             Marg<span className="text-oxblood">i</span>nalia
           </h1>
         </div>
@@ -797,7 +846,7 @@ export function ReadingList({ initialItems, initialThemes, userName }: {
           <button
             type="submit"
             disabled={loading || !url.trim()}
-            className="bg-oxblood text-paper px-6 py-3 font-mono text-xs tracking-[0.18em] uppercase hover:bg-ink transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="border border-oxblood text-oxblood px-6 py-3 font-mono text-xs tracking-[0.18em] uppercase hover:bg-oxblood hover:text-paper transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {loading ? "Reading…" : "Save & summarize"}
           </button>
@@ -849,7 +898,7 @@ export function ReadingList({ initialItems, initialThemes, userName }: {
         )}
         {themesExpanded && themes.length === 0 && !refreshingThemes && (
           <p className="font-serif italic text-ink/40 text-sm">
-            No themes yet — click Generate once you have 8+ indexed articles.
+            Themes emerge from reading. Yours haven't yet.
           </p>
         )}
         {themesExpanded && themes.length > 0 && (
@@ -895,26 +944,22 @@ export function ReadingList({ initialItems, initialThemes, userName }: {
 
       {/* Filter tabs — hidden during search */}
       {!isSearching && (
-        <div className="flex flex-wrap gap-x-1 gap-y-1 mb-8 border-b border-rule pb-4 items-center">
-          {TABS.map(({ key, label, count }) => (
-            <button
-              key={key}
-              onClick={() => setFilter(key)}
-              className={`font-mono text-[10px] tracking-[0.15em] uppercase px-3 py-1.5 transition-colors ${
-                filter === key ? "bg-ink text-paper" : "text-muted hover:text-ink"
-              }`}
-            >
-              {label} · {count}
-            </button>
+        <div className="flex flex-wrap gap-x-1 gap-y-1 mb-4 border-b border-rule pb-4 items-center">
+          {TABS.map(({ key, label, count }, idx) => (
+            <>
+              <button
+                key={key}
+                onClick={() => setFilter(key)}
+                className={`font-mono text-[10px] tracking-[0.15em] uppercase px-3 py-1.5 transition-colors ${
+                  filter === key ? "bg-ink text-paper" : "text-muted hover:text-ink"
+                }`}
+              >
+                {label} · {count}
+              </button>
+              {/* Separator after first tab (Unread & Reading) */}
+              {idx === 0 && <span className="w-px h-3 bg-rule mx-1 self-center" />}
+            </>
           ))}
-          <button
-            onClick={() => { setSelectMode(v => !v); setSelectedIds(new Set()); }}
-            className={`ml-auto font-mono text-[10px] tracking-[0.15em] uppercase px-3 py-1.5 transition-colors ${
-              selectMode ? "bg-oxblood text-paper" : "text-muted hover:text-ink"
-            }`}
-          >
-            {selectMode ? "Cancel" : "Select for draft"}
-          </button>
         </div>
       )}
 
@@ -930,6 +975,20 @@ export function ReadingList({ initialItems, initialThemes, userName }: {
                 : `${searchResults.length} result${searchResults.length > 1 ? "s" : ""} · semantic search`}
             </span>
           )}
+        </div>
+      )}
+
+      {/* Select for draft — contextual, above list */}
+      {!isSearching && (
+        <div className="flex justify-end mb-6">
+          <button
+            onClick={() => { setSelectMode(v => !v); setSelectedIds(new Set()); }}
+            className={`font-mono text-[10px] tracking-[0.15em] uppercase transition-colors ${
+              selectMode ? "text-oxblood" : "text-muted hover:text-ink"
+            }`}
+          >
+            {selectMode ? "✕ cancel selection" : "select for draft"}
+          </button>
         </div>
       )}
 

@@ -27,6 +27,10 @@ export type ReadingItem = {
   // Phase 2
   embedding_model: string | null;
   embedded_at: string | null;
+  // Phase 6
+  editorial_note: string | null;
+  editorial_references: string[];
+  editorial_generated_at: string | null;
 };
 
 export type SearchResult = ReadingItem & { similarity: number };

@@ -1,9 +1,9 @@
 import "server-only";
 import { supabase } from "./supabase";
 
-const DAILY_LIMIT = 100;
+const DAILY_LIMIT = 150;
 
-export type Operation = "summarize" | "embed" | "cluster-name" | "synthesize";
+export type Operation = "summarize" | "embed" | "cluster-name" | "synthesize" | "editorial-note";
 
 export async function checkDailyLimit(userId: string): Promise<boolean> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
