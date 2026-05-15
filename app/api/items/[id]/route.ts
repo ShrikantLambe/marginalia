@@ -40,7 +40,6 @@ export async function PATCH(
     updates.rating = body.rating;
   }
 
-  if (body.highlights !== undefined) updates.highlights = body.highlights;
   if (body.summary !== undefined) updates.summary = body.summary;
   if (body.tags !== undefined) updates.tags = body.tags;
 

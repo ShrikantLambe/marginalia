@@ -14,7 +14,20 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false },
 });
 
+/** Legacy type for the old jsonb highlights column — only used for migration reference */
 export type Highlight = { text: string; created_at: string };
+
+/** Structured highlight from the dedicated highlights table */
+export type ArticleHighlight = {
+  id: string;
+  user_id: string;
+  item_id: string;
+  text: string;
+  note: string | null;
+  position_start: number | null;
+  position_end: number | null;
+  created_at: string;
+};
 
 export type ReadingItem = {
   id: string;
@@ -27,7 +40,6 @@ export type ReadingItem = {
   // Phase 1
   status: "unread" | "reading" | "read" | "archived";
   notes: string | null;
-  highlights: Highlight[];
   rating: number | null;
   read_at: string | null;
   last_opened_at: string | null;
@@ -38,6 +50,14 @@ export type ReadingItem = {
   editorial_note: string | null;
   editorial_references: string[];
   editorial_generated_at: string | null;
+  // Phase 7
+  article_html: string | null;
+  article_text: string | null;
+  author: string | null;
+  site_name: string | null;
+  hero_image_url: string | null;
+  word_count: number | null;
+  reading_time_minutes: number | null;
 };
 
 export type SearchResult = ReadingItem & { similarity: number };
@@ -63,3 +83,30 @@ export type ReadingTheme = {
   generated_at: string;
   user_renamed: boolean;
 };
+
+export type BriefStatus = "open" | "drafting" | "closed" | "archived";
+
+export type Brief = {
+  id: string;
+  user_id: string;
+  question: string;
+  description: string | null;
+  embedding: string | null;
+  status: BriefStatus;
+  closed_reason: string | null;
+  created_at: string;
+  closed_at: string | null;
+  // virtual — computed in API
+  item_count?: number;
+};
+
+export type BriefItem = {
+  brief_id: string;
+  item_id: string;
+  added_at: string;
+  added_by: "user" | "auto";
+  similarity: number | null;
+  user_dismissed: boolean;
+};
+
+export type BriefItemWithArticle = BriefItem & { reading_list: ReadingItem };

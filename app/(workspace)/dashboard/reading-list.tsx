@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { ReadingItem, Highlight, SearchResult, ReadingTheme } from "@/lib/supabase";
+import type { ReadingItem, ArticleHighlight, SearchResult, ReadingTheme } from "@/lib/supabase";
 
 type Status = "unread" | "reading" | "read" | "archived";
 type Tab = "later" | "read" | "archive" | "all";
@@ -113,11 +114,21 @@ function RightPane({
   onRemove: (id: string) => void;
 }) {
   const [notesValue, setNotesValue] = useState(item?.notes ?? "");
+  const [highlights, setHighlights] = useState<ArticleHighlight[]>([]);
   const [newHighlight, setNewHighlight] = useState("");
   const [addingHighlight, setAddingHighlight] = useState(false);
   const [annotating, setAnnotating] = useState(false);
 
   useEffect(() => { setNotesValue(item?.notes ?? ""); }, [item?.id, item?.notes]);
+
+  // Fetch highlights whenever selected item changes
+  useEffect(() => {
+    if (!item) { setHighlights([]); return; }
+    fetch(`/api/items/${item.id}/highlights`)
+      .then(r => r.ok ? r.json() : [])
+      .then(setHighlights)
+      .catch(() => setHighlights([]));
+  }, [item?.id]);
 
   if (!item) {
     return (
@@ -129,7 +140,6 @@ function RightPane({
     );
   }
 
-  const highlights: Highlight[] = Array.isArray(item.highlights) ? item.highlights : [];
   const status = (item.status ?? "unread") as Status;
 
   async function saveNotes() {
@@ -141,13 +151,18 @@ function RightPane({
   async function addHighlight() {
     const text = newHighlight.trim();
     if (!text) return;
-    const next: Highlight[] = [...highlights, { text, created_at: new Date().toISOString() }];
     setNewHighlight(""); setAddingHighlight(false);
-    await onUpdate(item!.id, { highlights: next });
+    const res = await fetch(`/api/items/${item!.id}/highlights`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (res.ok) { const h: ArticleHighlight = await res.json(); setHighlights(prev => [...prev, h]); }
   }
 
-  async function removeHighlight(idx: number) {
-    await onUpdate(item!.id, { highlights: highlights.filter((_, i) => i !== idx) });
+  async function removeHighlight(hid: string) {
+    setHighlights(prev => prev.filter(h => h.id !== hid));
+    await fetch(`/api/items/${item!.id}/highlights/${hid}`, { method: "DELETE" });
   }
 
   async function reAnnotate() {
@@ -170,7 +185,7 @@ function RightPane({
         {hostname(item.url)} · {formatDate(item.created_at)}
       </div>
 
-      {/* Title + open link */}
+      {/* Title + links */}
       <div>
         <h2 className="font-serif text-[28px] font-semibold leading-tight mb-2">
           <a href={item.url} target="_blank" rel="noopener noreferrer"
@@ -188,6 +203,10 @@ function RightPane({
             }`}>
             {STATUS_LABELS[status]}
           </button>
+          <Link href={`/items/${item.id}`}
+            className="text-muted hover:text-oxblood transition-colors">
+            Read ↗
+          </Link>
           <button onClick={() => onRemove(item.id)} className="text-muted hover:text-oxblood transition-colors">
             Remove
           </button>
@@ -252,11 +271,11 @@ function RightPane({
         <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-muted mb-2">Highlights</div>
         {highlights.length > 0 && (
           <ul className="space-y-3 mb-3">
-            {highlights.map((h, i) => (
-              <li key={i} className="flex items-start gap-2 group/hl">
+            {highlights.map(h => (
+              <li key={h.id} className="flex items-start gap-2 group/hl">
                 <div className="w-[2px] bg-oxblood/60 flex-shrink-0 self-stretch mt-0.5" />
                 <p className="font-serif italic text-[14px] text-ink/80 flex-1 leading-snug">{h.text}</p>
-                <button onClick={() => removeHighlight(i)}
+                <button onClick={() => removeHighlight(h.id)}
                   className="opacity-0 group-hover/hl:opacity-100 transition-opacity text-muted hover:text-oxblood text-xs">✕</button>
               </li>
             ))}
@@ -304,6 +323,10 @@ export function ReadingList({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [angle, setAngle] = useState("");
   const [drafting, setDrafting] = useState(false);
+  const [themes, setThemes] = useState<ReadingTheme[]>(initialThemes);
+  const [themeFilter, setThemeFilter] = useState<string | null>(null);
+  const [generatingThemes, setGeneratingThemes] = useState(false);
+  const [themesError, setThemesError] = useState<string | null>(null);
   const [backfillStatus, setBackfillStatus] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -356,7 +379,8 @@ export function ReadingList({
           : tab === "archive" ? s === "archived"
           : true;
         const tagsOk = tagFilters.every(t => i.tags?.includes(t));
-        return tabOk && tagsOk;
+        const themeOk = !themeFilter ? true : (themes.find(th => th.id === themeFilter)?.item_ids ?? []).includes(i.id);
+        return tabOk && tagsOk && themeOk;
       });
 
   const selectedItem = items.find(i => i.id === selectedItemId) ?? null;
@@ -422,12 +446,24 @@ export function ReadingList({
   }
 
   async function runBackfill() {
-    setBackfillStatus("Indexing…");
+    setBackfillStatus("Embedding…");
     try {
       const res = await fetch("/api/items/backfill-embeddings", { method: "POST" });
       const { processed, failed } = await res.json();
-      setBackfillStatus(`Indexed ${processed}${failed ? `, ${failed} failed` : ""}`);
+      setBackfillStatus(`Embedded ${processed}${failed ? `, ${failed} failed` : ""}`);
     } catch { setBackfillStatus("Failed"); }
+  }
+
+  async function generateThemes() {
+    setGeneratingThemes(true); setThemesError(null);
+    try {
+      const res = await fetch("/api/themes", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) { setThemesError(json.error ?? "Failed"); return; }
+      const updated = await fetch("/api/themes").then(r => r.json());
+      setThemes(updated ?? []);
+    } catch { setThemesError("Failed to generate themes."); }
+    finally { setGeneratingThemes(false); }
   }
 
   const TABS: { key: Tab; label: string }[] = [
@@ -449,9 +485,13 @@ export function ReadingList({
             </h1>
             <div className="flex items-center gap-3 font-mono text-[10px] tracking-[0.12em] uppercase text-muted">
               <a href="/synthesis" className="hover:text-ink transition-colors">Drafts</a>
-              <button onClick={runBackfill} disabled={backfillStatus === "Indexing…"}
+              <button onClick={generateThemes} disabled={generatingThemes}
                 className="hover:text-ink transition-colors disabled:opacity-40">
-                {backfillStatus ?? "Index"}
+                {generatingThemes ? "…" : "Themes"}
+              </button>
+              <button onClick={runBackfill} disabled={backfillStatus === "Embedding…"}
+                className="hover:text-ink transition-colors disabled:opacity-40">
+                {backfillStatus ?? "Embed"}
               </button>
             </div>
           </div>
@@ -496,6 +536,33 @@ export function ReadingList({
               }`}>
               All · {counts.all}
             </button>
+          </div>
+        )}
+
+        {/* Themes strip */}
+        {!isSearching && themes.length > 0 && (
+          <div className="flex-shrink-0 flex items-center gap-2 px-5 py-2 border-b border-rule overflow-x-auto">
+            {themeFilter && (
+              <button onClick={() => setThemeFilter(null)}
+                className="font-mono text-[9px] tracking-[0.12em] uppercase text-oxblood flex-shrink-0 hover:text-ink transition-colors">
+                ✕ clear
+              </button>
+            )}
+            {themes.map(th => (
+              <button key={th.id} onClick={() => setThemeFilter(themeFilter === th.id ? null : th.id)}
+                className={`font-mono text-[9px] tracking-[0.12em] uppercase px-2 py-0.5 border flex-shrink-0 transition-colors ${
+                  themeFilter === th.id
+                    ? "border-oxblood text-oxblood"
+                    : "border-rule text-muted hover:border-ink hover:text-ink"
+                }`}>
+                {th.name}
+              </button>
+            ))}
+          </div>
+        )}
+        {themesError && (
+          <div className="flex-shrink-0 px-5 py-1">
+            <p className="font-serif italic text-oxblood text-[12px]">{themesError}</p>
           </div>
         )}
 

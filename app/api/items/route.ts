@@ -6,6 +6,7 @@ import { embed, buildEmbeddingText, EMBEDDING_MODEL } from "@/lib/embeddings";
 import { checkAndLog, logUsage } from "@/lib/usage-log";
 import { generateEditorialNote } from "@/lib/editorial";
 import { rateLimit } from "@/lib/rate-limit";
+import { autoRouteToBriefs } from "@/lib/brief-routing";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { title, summary, tags } = await fetchAndSummarize(url);
+    const { title, summary, tags, articleHtml, articleText, author, siteName, heroImageUrl, wordCount, readingTimeMinutes } = await fetchAndSummarize(url);
     const allowed = await checkAndLog(user.id, "summarize");
     if (!allowed) {
       return NextResponse.json(
@@ -38,9 +39,10 @@ export async function POST(req: Request) {
 
     // Embedding — fail gracefully, never block the save
     const embeddingFields: Record<string, unknown> = {};
+    let embeddingVec: number[] | null = null;
     try {
-      const vector = await embed(buildEmbeddingText(title, summary, tags));
-      embeddingFields.embedding = `[${vector.join(",")}]`;
+      embeddingVec = await embed(buildEmbeddingText(title, summary, tags));
+      embeddingFields.embedding = `[${embeddingVec.join(",")}]`;
       embeddingFields.embedding_model = EMBEDDING_MODEL;
       embeddingFields.embedded_at = new Date().toISOString();
       await logUsage(user.id, "embed");
@@ -50,7 +52,15 @@ export async function POST(req: Request) {
 
     const { data: savedItem, error } = await supabase
       .from("reading_list")
-      .insert({ user_id: user.id, url, title, summary, tags, ...embeddingFields })
+      .insert({
+        user_id: user.id, url, title, summary, tags, ...embeddingFields,
+        article_html: articleHtml,
+        article_text: articleText,
+        author, site_name: siteName,
+        hero_image_url: heroImageUrl,
+        word_count: wordCount,
+        reading_time_minutes: readingTimeMinutes,
+      })
       .select()
       .single();
 
@@ -63,6 +73,11 @@ export async function POST(req: Request) {
       }
       console.error("[POST /api/items] supabase error:", JSON.stringify(error));
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // Auto-route to matching briefs — fire-and-forget
+    if (embeddingVec) {
+      autoRouteToBriefs(user.id, savedItem.id, embeddingVec).catch(() => {});
     }
 
     // Editorial annotation — fire-and-forget, never blocks the response.

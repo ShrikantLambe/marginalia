@@ -56,6 +56,111 @@ footer {
   text-decoration-color: #7a1f1f;
 }
 
+/* ── Highlight mark ─────────────────────────────────────────────────────── */
+.marginalia-highlight {
+  background: none;
+  text-decoration: underline;
+  text-decoration-color: #7a1f1f;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: text-decoration-color 0.15s;
+}
+.marginalia-highlight:hover {
+  text-decoration-color: #a83030;
+}
+
+/* ── Article body prose ─────────────────────────────────────────────────── */
+.article-body {
+  font-family: var(--font-serif);
+  font-size: 19px;
+  line-height: 1.75;
+  color: #1a1815;
+}
+.article-body p { margin-bottom: 1.25em; }
+.article-body h1,
+.article-body h2,
+.article-body h3,
+.article-body h4 {
+  font-weight: 600;
+  line-height: 1.25;
+  margin-top: 1.75em;
+  margin-bottom: 0.5em;
+}
+.article-body h1 { font-size: 1.55em; }
+.article-body h2 { font-size: 1.3em; }
+.article-body h3 { font-size: 1.1em; }
+.article-body h4 { font-size: 1em; }
+.article-body a {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(122, 31, 31, 0.4);
+}
+.article-body a:hover { text-decoration-color: #7a1f1f; }
+.article-body blockquote {
+  border-left: 2px solid #7a1f1f;
+  padding-left: 1.25em;
+  font-style: italic;
+  color: rgba(26, 24, 21, 0.7);
+  margin: 1.5em 0;
+}
+.article-body img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 2em auto;
+}
+.article-body figure { margin: 2em 0; }
+.article-body figcaption {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: center;
+  color: rgba(26, 24, 21, 0.5);
+  margin-top: 0.5em;
+}
+.article-body pre {
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  line-height: 1.6;
+  background: rgba(26, 24, 21, 0.04);
+  border: 1px solid rgba(26, 24, 21, 0.08);
+  padding: 1em 1.25em;
+  overflow-x: auto;
+  margin-bottom: 1.25em;
+}
+.article-body code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: rgba(26, 24, 21, 0.05);
+  padding: 0.1em 0.3em;
+}
+.article-body pre code { background: none; padding: 0; }
+.article-body ul,
+.article-body ol {
+  padding-left: 1.5em;
+  margin-bottom: 1.25em;
+}
+.article-body li { margin-bottom: 0.35em; }
+.article-body hr {
+  border: none;
+  border-top: 1px solid rgba(26, 24, 21, 0.12);
+  margin: 2.5em 0;
+}
+.article-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+  margin-bottom: 1.5em;
+}
+.article-body th,
+.article-body td {
+  border: 1px solid rgba(26, 24, 21, 0.12);
+  padding: 0.5em 0.75em;
+  text-align: left;
+}
+.article-body th { font-weight: 600; background: rgba(26, 24, 21, 0.03); }
+
 /* Stagger entrance */
 @keyframes rise {
   from {

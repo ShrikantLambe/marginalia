@@ -31,6 +31,17 @@ export function parseEmbedding(raw: unknown): number[] | null {
   }
 }
 
+export function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length || a.length === 0) return 0;
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    na  += a[i] * a[i];
+    nb  += b[i] * b[i];
+  }
+  return na && nb ? dot / (Math.sqrt(na) * Math.sqrt(nb)) : 0;
+}
+
 // API key goes in a header, not a query param, so it doesn't appear in logs
 export async function embed(text: string): Promise<number[]> {
   const key = process.env.GEMINI_API_KEY;
