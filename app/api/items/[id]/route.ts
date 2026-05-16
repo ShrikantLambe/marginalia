@@ -5,7 +5,7 @@ import { embed, buildEmbeddingText, EMBEDDING_MODEL } from "@/lib/embeddings";
 
 export const runtime = "nodejs";
 
-const VALID_STATUSES = ["unread", "reading", "read", "archived"] as const;
+const VALID_STATUSES = ["queued", "reading", "read", "archived"] as const;
 
 export async function PATCH(
   req: Request,
@@ -29,6 +29,7 @@ export async function PATCH(
   }
 
   if (body.notes !== undefined) updates.notes = body.notes;
+  if (body.user_tags !== undefined) updates.user_tags = body.user_tags;
 
   if (body.rating !== undefined) {
     if (body.rating !== null && (body.rating < 1 || body.rating > 5)) {

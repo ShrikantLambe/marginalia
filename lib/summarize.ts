@@ -50,7 +50,77 @@ function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
+function extractYouTubeId(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.hostname === "youtu.be") return u.pathname.slice(1).split("?")[0];
+    if (u.hostname.includes("youtube.com")) return u.searchParams.get("v");
+  } catch { /* ignore */ }
+  return null;
+}
+
+async function fetchAndSummarizeYouTube(url: string, videoId: string): Promise<Summary> {
+  // Metadata via oEmbed — free, no API key
+  let title = url;
+  let author: string | null = null;
+  try {
+    const oembedRes = await fetch(
+      `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
+      { signal: AbortSignal.timeout(8_000) }
+    );
+    if (oembedRes.ok) {
+      const oembed = await oembedRes.json();
+      title = oembed.title ?? url;
+      author = oembed.author_name ?? null;
+    }
+  } catch { /* fall back to url as title */ }
+
+  // Thumbnail — always available at this URL, no API key needed
+  const heroImageUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+
+  // Summarize via Gemini multimodal — processes audio + visuals natively
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const prompt = `You are summarizing a YouTube video for a personal reading list.
+
+Output two parts, separated by exactly one line containing only "---TAGS---".
+
+Part 1: A 3-4 sentence TL;DR of what this video covers. Crisp, factual — what does the speaker actually say or argue?
+Part 2: 3-5 short topic tags (lowercase, one or two words each), comma-separated.
+
+VIDEO TITLE: ${title}
+CHANNEL: ${author ?? "unknown"}`;
+
+  const geminiResult = await model.generateContent([
+    { fileData: { fileUri: url, mimeType: "video/mp4" } },
+    { text: prompt },
+  ]);
+  const raw = geminiResult.response.text().trim();
+
+  const parts = raw.split(/---TAGS---/i).map(s => s.trim());
+  const summary = parts[0] || raw;
+  const tags = (parts[1] || "")
+    .split(",")
+    .map(t => t.trim().toLowerCase().replace(/^#/, ""))
+    .filter(Boolean)
+    .slice(0, 5);
+
+  return {
+    title,
+    summary,
+    tags,
+    articleHtml: "",
+    articleText: summary, // used for embeddings
+    author,
+    siteName: "YouTube",
+    heroImageUrl,
+    wordCount: 0,
+    readingTimeMinutes: 0,
+  };
+}
+
 export async function fetchAndSummarize(url: string): Promise<Summary> {
+  const youtubeId = extractYouTubeId(url);
+  if (youtubeId) return fetchAndSummarizeYouTube(url, youtubeId);
   // 1. Fetch the page
   const res = await fetch(url, {
     headers: {

@@ -38,7 +38,8 @@ export type ReadingItem = {
   tags: string[] | null;
   created_at: string;
   // Phase 1
-  status: "unread" | "reading" | "read" | "archived";
+  status: "queued" | "reading" | "read" | "archived";
+  user_tags: string[];
   notes: string | null;
   rating: number | null;
   read_at: string | null;
@@ -69,7 +70,27 @@ export type Synthesis = {
   prompt: string | null;
   draft: string;
   source_item_ids: string[];
+  project_id: string | null;
   created_at: string;
+};
+
+export type Project = {
+  id: string;
+  user_id: string;
+  name: string;
+  emoji: string;
+  color: string | null;
+  description: string | null;
+  status: "active" | "paused" | "archived";
+  sort_order: number;
+  created_at: string;
+  item_count?: number;
+};
+
+export type ProjectItem = {
+  project_id: string;
+  item_id: string;
+  added_at: string;
 };
 
 export type ReadingTheme = {

@@ -3,13 +3,13 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { ReadingItem, ArticleHighlight, SearchResult, ReadingTheme } from "@/lib/supabase";
+import type { ReadingItem, ArticleHighlight, SearchResult, ReadingTheme, Project } from "@/lib/supabase";
 
-type Status = "unread" | "reading" | "read" | "archived";
-type Tab = "later" | "read" | "archive" | "all";
+type Status = "queued" | "reading" | "read" | "archived";
+type Tab = "queued" | "reading" | "read" | "archived" | "all";
 
-const STATUS_CYCLE: Status[] = ["unread", "reading", "read", "archived"];
-const STATUS_LABELS: Record<Status, string> = { unread: "Unread", reading: "Reading", read: "Read", archived: "Archived" };
+const STATUS_CYCLE: Status[] = ["queued", "reading", "read", "archived"];
+const STATUS_LABELS: Record<Status, string> = { queued: "Queued", reading: "Reading", read: "Read", archived: "Archived" };
 
 function nextStatus(s: Status): Status {
   return STATUS_CYCLE[(STATUS_CYCLE.indexOf(s) + 1) % STATUS_CYCLE.length];
@@ -54,7 +54,7 @@ function ListItem({
   item: ReadingItem; selected: boolean; selectMode: boolean; inSelectedSet: boolean;
   onSelect: () => void; onToggleSelect: () => void; onCycleStatus: (e: React.MouseEvent) => void;
 }) {
-  const status = (item.status ?? "unread") as Status;
+  const status = (item.status ?? "queued") as Status;
   return (
     <li
       onClick={selectMode ? onToggleSelect : onSelect}
@@ -73,6 +73,7 @@ function ListItem({
         <span>{hostname(item.url)}</span>
         <span>·</span>
         <span>{formatDate(item.created_at)}</span>
+        {item.reading_time_minutes ? <><span>·</span><span>~{item.reading_time_minutes}m</span></> : null}
         <span>·</span>
         <button onClick={onCycleStatus}
           className={`px-1 py-px border text-[9px] transition-colors ${
@@ -94,10 +95,17 @@ function ListItem({
           {trunc(item.summary, 110)}
         </p>
       )}
-      {/* Line 4: tags */}
+      {/* Line 4: tags — sage for user-added, muted for LLM */}
       {item.tags && item.tags.length > 0 && (
-        <p className="font-mono text-[10px] tracking-[0.12em] uppercase text-sage truncate">
-          {item.tags.slice(0, 3).join(", ")}{item.tags.length > 3 ? "…" : ""}
+        <p className="font-mono text-[10px] tracking-[0.12em] uppercase truncate">
+          {item.tags.slice(0, 3).map((t, i) => {
+            const isUser = (item.user_tags ?? []).includes(t);
+            return (
+              <span key={t} className={isUser ? "text-sage" : "text-muted/70"}>
+                {!isUser && <span className="text-[8px]">✦ </span>}{t}{i < Math.min(item.tags!.length, 3) - 1 ? ", " : ""}
+              </span>
+            );
+          })}{item.tags.length > 3 ? "…" : ""}
         </p>
       )}
     </li>
@@ -140,7 +148,7 @@ function RightPane({
     );
   }
 
-  const status = (item.status ?? "unread") as Status;
+  const status = (item.status ?? "queued") as Status;
 
   async function saveNotes() {
     if (notesValue !== (item!.notes ?? "")) {
@@ -246,10 +254,17 @@ function RightPane({
         </div>
       )}
 
-      {/* Tags */}
+      {/* Tags — sage = user-added, muted = LLM-extracted */}
       {item.tags && item.tags.length > 0 && (
-        <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10px] tracking-[0.12em] uppercase text-sage">
-          {item.tags.map(t => <span key={t}>· {t}</span>)}
+        <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10px] tracking-[0.12em] uppercase">
+          {item.tags.map(t => {
+            const isUser = (item.user_tags ?? []).includes(t);
+            return (
+              <span key={t} className={isUser ? "text-sage" : "text-muted/70"}>
+                {!isUser && <span className="text-[8px]">✦ </span>}· {t}
+              </span>
+            );
+          })}
         </div>
       )}
 
@@ -303,16 +318,17 @@ function RightPane({
 // ── Main component ───────────────────────────────────────────────────────────
 
 export function ReadingList({
-  initialItems, initialThemes, userName,
+  initialItems, initialThemes, userName, projectId, projects, projectName,
 }: {
   initialItems: ReadingItem[]; initialThemes: ReadingTheme[]; userName: string;
+  projectId?: string; projects?: Project[]; projectName?: string;
 }) {
   const router = useRouter();
   const [items, setItems] = useState<ReadingItem[]>(initialItems);
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("later");
+  const [tab, setTab] = useState<Tab>("queued");
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
@@ -328,7 +344,15 @@ export function ReadingList({
   const [generatingThemes, setGeneratingThemes] = useState(false);
   const [themesError, setThemesError] = useState<string | null>(null);
   const [backfillStatus, setBackfillStatus] = useState<string | null>(null);
+  const [bookmarkletHref, setBookmarkletHref] = useState<string>("#");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Build bookmarklet href with current origin (must run client-side)
+  useEffect(() => {
+    const origin = window.location.origin;
+    const js = `javascript:(function(){window.open('${origin}/quick-save?url='+encodeURIComponent(location.href)+'&title='+encodeURIComponent(document.title)+'&popup=1','_blank','width=440,height=280,scrollbars=no,resizable=no,toolbar=no');})()`;
+    setBookmarkletHref(js);
+  }, []);
 
   // Lazy annotation backfill
   useEffect(() => {
@@ -364,20 +388,26 @@ export function ReadingList({
   const isSearching = searchQuery.trim().length > 0;
 
   const counts = {
-    later: items.filter(i => i.status === "unread" || i.status === "reading").length,
-    read: items.filter(i => i.status === "read").length,
-    archive: items.filter(i => i.status === "archived").length,
-    all: items.length,
+    queued:   items.filter(i => i.status === "queued").length,
+    reading:  items.filter(i => i.status === "reading").length,
+    read:     items.filter(i => i.status === "read").length,
+    archived: items.filter(i => i.status === "archived").length,
+    all:      items.length,
   };
+
+  // Total reading time for queued items
+  const queuedMinutes = items
+    .filter(i => i.status === "queued" && i.reading_time_minutes)
+    .reduce((acc, i) => acc + (i.reading_time_minutes ?? 0), 0);
+  const queueTime = queuedMinutes >= 60
+    ? `~${Math.floor(queuedMinutes / 60)}h ${queuedMinutes % 60}m`
+    : `~${queuedMinutes}m`;
 
   const filteredItems = isSearching
     ? (searchResults ?? [])
     : items.filter(i => {
-        const s = i.status ?? "unread";
-        const tabOk = tab === "later" ? (s === "unread" || s === "reading")
-          : tab === "read" ? s === "read"
-          : tab === "archive" ? s === "archived"
-          : true;
+        const s = i.status ?? "queued";
+        const tabOk = tab === "all" ? true : s === tab;
         const tagsOk = tagFilters.every(t => i.tags?.includes(t));
         const themeOk = !themeFilter ? true : (themes.find(th => th.id === themeFilter)?.item_ids ?? []).includes(i.id);
         return tabOk && tagsOk && themeOk;
@@ -385,13 +415,12 @@ export function ReadingList({
 
   const selectedItem = items.find(i => i.id === selectedItemId) ?? null;
 
-  async function addItem(e: React.FormEvent) {
-    e.preventDefault(); setError(null); if (!url.trim()) return;
-    setLoading(true);
+  async function saveUrl(target: string) {
+    setError(null); setLoading(true);
     try {
       const res = await fetch("/api/items", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: url.trim() }),
+        body: JSON.stringify({ url: target }),
       });
       const data = await res.json();
       if (res.status === 409) { setError("Already on your shelf."); setUrl(""); return; }
@@ -401,6 +430,22 @@ export function ReadingList({
       setSelectedItemId(data.id);
     } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong"); }
     finally { setLoading(false); }
+  }
+
+  async function addItem(e: React.FormEvent) {
+    e.preventDefault();
+    if (!url.trim()) return;
+    await saveUrl(url.trim());
+  }
+
+  function handleUrlPaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    const pasted = e.clipboardData.getData("text").trim();
+    try {
+      new URL(pasted);
+      e.preventDefault();
+      setUrl(pasted);
+      saveUrl(pasted);
+    } catch { /* not a URL — normal paste */ }
   }
 
   async function removeItem(id: string) {
@@ -467,9 +512,10 @@ export function ReadingList({
   }
 
   const TABS: { key: Tab; label: string }[] = [
-    { key: "later", label: "Later" },
-    { key: "read", label: "Read" },
-    { key: "archive", label: "Archive" },
+    { key: "queued",   label: "Queued"   },
+    { key: "reading",  label: "Reading"  },
+    { key: "read",     label: "Read"     },
+    { key: "archived", label: "Archived" },
   ];
 
   return (
@@ -478,10 +524,10 @@ export function ReadingList({
       <div className="flex flex-col flex-1 min-w-0 border-r border-rule overflow-hidden">
         {/* Top: wordmark + inputs */}
         <div className="flex-shrink-0 px-5 pt-5 pb-3 border-b border-rule">
-          {/* Wordmark row */}
+          {/* Header row */}
           <div className="flex items-center justify-between mb-4">
-            <h1 className="font-serif text-[28px] font-semibold leading-none tracking-tight">
-              Marg<span className="text-oxblood">i</span>nalia
+            <h1 className="font-serif text-[22px] font-semibold leading-none tracking-tight truncate">
+              {projectName ? projectName : <span>Inbox</span>}
             </h1>
             <div className="flex items-center gap-3 font-mono text-[10px] tracking-[0.12em] uppercase text-muted">
               <a href="/synthesis" className="hover:text-ink transition-colors">Drafts</a>
@@ -493,17 +539,27 @@ export function ReadingList({
                 className="hover:text-ink transition-colors disabled:opacity-40">
                 {backfillStatus ?? "Embed"}
               </button>
+              <a
+                href={bookmarkletHref}
+                title="Drag this to your bookmarks bar to save any page in one click"
+                onClick={e => e.preventDefault()}
+                draggable
+                className="hover:text-ink transition-colors cursor-grab active:cursor-grabbing select-none"
+              >
+                Bookmarklet
+              </a>
             </div>
           </div>
           {/* URL input */}
-          <form onSubmit={addItem} className="flex gap-2 mb-2">
+          <form onSubmit={addItem} className="flex items-center gap-2 mb-2">
             <input type="url" value={url} onChange={e => setUrl(e.target.value)}
+              onPaste={handleUrlPaste}
+              onKeyDown={e => { if (e.key === "Escape") { setUrl(""); setError(null); (e.target as HTMLInputElement).blur(); } }}
               placeholder="https://…" required disabled={loading}
               className="flex-1 bg-transparent border-b border-rule focus:border-oxblood outline-none px-1 py-2 font-serif italic text-[16px] placeholder:text-muted/60 transition-colors disabled:opacity-50 h-12" />
-            <button type="submit" disabled={loading || !url.trim()}
-              className="border border-oxblood text-oxblood px-4 font-mono text-[10px] tracking-[0.18em] uppercase hover:bg-oxblood hover:text-paper transition-colors disabled:opacity-40 h-12 flex-shrink-0">
-              {loading ? "…" : "Save"}
-            </button>
+            <span className="font-mono text-[10px] text-muted/50 flex-shrink-0">
+              {loading ? "…" : "↵"}
+            </span>
           </form>
           {error && <p className="font-serif italic text-oxblood text-sm mb-1">{error}</p>}
           {/* Search */}
@@ -521,21 +577,28 @@ export function ReadingList({
 
         {/* Tab strip */}
         {!isSearching && (
-          <div className="flex-shrink-0 flex items-center px-5 border-b border-rule">
-            {TABS.map(({ key, label }) => (
-              <button key={key} onClick={() => setTab(key)}
-                className={`font-mono text-[10px] tracking-[0.15em] uppercase py-3 pr-4 transition-colors ${
-                  tab === key ? "text-ink border-b-2 border-ink" : "text-muted hover:text-ink border-b-2 border-transparent"
+          <div className="flex-shrink-0 border-b border-rule">
+            <div className="flex items-center px-5">
+              {TABS.map(({ key, label }) => (
+                <button key={key} onClick={() => setTab(key)}
+                  className={`font-mono text-[10px] tracking-[0.15em] uppercase py-3 pr-4 transition-colors ${
+                    tab === key ? "text-ink border-b-2 border-ink" : "text-muted hover:text-ink border-b-2 border-transparent"
+                  }`}>
+                  {label} · {counts[key as keyof typeof counts]}
+                </button>
+              ))}
+              <button onClick={() => setTab("all")}
+                className={`ml-auto font-mono text-[10px] tracking-[0.15em] uppercase py-3 transition-colors ${
+                  tab === "all" ? "text-ink" : "text-muted hover:text-ink"
                 }`}>
-                {label} · {counts[key]}
+                All · {counts.all}
               </button>
-            ))}
-            <button onClick={() => setTab("all")}
-              className={`ml-auto font-mono text-[10px] tracking-[0.15em] uppercase py-3 transition-colors ${
-                tab === "all" ? "text-ink" : "text-muted hover:text-ink"
-              }`}>
-              All · {counts.all}
-            </button>
+            </div>
+            {tab === "queued" && queuedMinutes > 0 && (
+              <p className="px-5 pb-2 font-mono text-[9px] tracking-[0.12em] uppercase text-muted">
+                Queue: {counts.queued} {counts.queued === 1 ? "item" : "items"} · {queueTime}
+              </p>
+            )}
           </div>
         )}
 
@@ -574,10 +637,33 @@ export function ReadingList({
             </span>
           )}
           {!isSearching && <span />}
-          <button onClick={() => { setSelectMode(v => !v); setSelectedIds(new Set()); }}
-            className={`font-mono text-[10px] tracking-[0.12em] uppercase transition-colors ${selectMode ? "text-oxblood" : "text-muted hover:text-ink"}`}>
-            {selectMode ? "✕ cancel" : "select for draft"}
-          </button>
+          <div className="flex items-center gap-3">
+            {selectMode && selectedIds.size > 0 && projects && projects.length > 0 && (
+              <select
+                onChange={async e => {
+                  const pid = e.target.value;
+                  if (!pid) return;
+                  await fetch(`/api/projects/${pid}/items`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ item_ids: [...selectedIds] }),
+                  });
+                  e.target.value = "";
+                }}
+                className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted bg-transparent border-b border-rule outline-none cursor-pointer hover:text-ink"
+                defaultValue=""
+              >
+                <option value="" disabled>assign to project…</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.emoji} {p.name}</option>
+                ))}
+              </select>
+            )}
+            <button onClick={() => { setSelectMode(v => !v); setSelectedIds(new Set()); }}
+              className={`font-mono text-[10px] tracking-[0.12em] uppercase transition-colors ${selectMode ? "text-oxblood" : "text-muted hover:text-ink"}`}>
+              {selectMode ? "✕ cancel" : "select for draft"}
+            </button>
+          </div>
         </div>
 
         {/* List */}
@@ -597,7 +683,7 @@ export function ReadingList({
                   inSelectedSet={selectedIds.has(item.id)}
                   onSelect={() => setSelectedItemId(selectedItemId === item.id ? null : item.id)}
                   onToggleSelect={() => toggleSelect(item.id)}
-                  onCycleStatus={e => { e.stopPropagation(); updateItem(item.id, { status: nextStatus((item.status ?? "unread") as Status) }); }}
+                  onCycleStatus={e => { e.stopPropagation(); updateItem(item.id, { status: nextStatus((item.status ?? "queued") as Status) }); }}
                 />
               ))}
             </ul>

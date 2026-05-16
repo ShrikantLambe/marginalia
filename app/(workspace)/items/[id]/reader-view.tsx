@@ -4,10 +4,10 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import type { ReadingItem, ArticleHighlight } from "@/lib/supabase";
 
-type Status = "unread" | "reading" | "read" | "archived";
-const STATUS_CYCLE: Status[] = ["unread", "reading", "read", "archived"];
+type Status = "queued" | "reading" | "read" | "archived";
+const STATUS_CYCLE: Status[] = ["queued", "reading", "read", "archived"];
 const STATUS_LABELS: Record<Status, string> = {
-  unread: "Unread",
+  queued: "Queued",
   reading: "Reading",
   read: "Read",
   archived: "Archived",
@@ -241,6 +241,17 @@ export function ReaderView({
     }
   }
 
+  function extractYouTubeId(url: string): string | null {
+    try {
+      const u = new URL(url);
+      if (u.hostname === "youtu.be") return u.pathname.slice(1).split("?")[0];
+      if (u.hostname.includes("youtube.com")) return u.searchParams.get("v");
+    } catch { /* ignore */ }
+    return null;
+  }
+
+  const youtubeId = extractYouTubeId(item.url);
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -257,8 +268,8 @@ export function ReaderView({
           </Link>
         </div>
 
-        {/* Hero image */}
-        {item.hero_image_url && (
+        {/* Hero image — hidden for YouTube (player replaces it) */}
+        {item.hero_image_url && !youtubeId && (
           <div className="mb-8">
             <img
               src={item.hero_image_url}
@@ -298,8 +309,18 @@ export function ReaderView({
             </a>
           </div>
 
-          {/* Article body */}
-          {item.article_html ? (
+          {/* Article body / YouTube player */}
+          {youtubeId ? (
+            <div className="w-full aspect-video mb-10">
+              <iframe
+                src={`https://www.youtube.com/embed/${youtubeId}`}
+                title={item.title ?? "YouTube video"}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                className="w-full h-full"
+              />
+            </div>
+          ) : item.article_html ? (
             <div
               ref={articleRef}
               className="article-body"
