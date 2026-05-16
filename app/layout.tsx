@@ -22,6 +22,8 @@ export const metadata: Metadata = {
   title: "Marginalia — a quiet reading list",
   description:
     "Paste a link, get a TL;DR. A small reading list for thoughtful readers.",
+  manifest: "/manifest.json",
+  themeColor: "#faf6ee",
 };
 
 export default function RootLayout({
