@@ -1,15 +1,10 @@
-import { stackServerApp } from "@/stack";
-import { redirect } from "next/navigation";
 import Link from "next/link";
+import { LandingRedirect } from "./landing-redirect";
 
-export const dynamic = "force-dynamic";
-
-export default async function Home() {
-  const user = await stackServerApp.getUser();
-  if (user) redirect("/dashboard");
-
+export default function Home() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-16 md:py-24">
+      <LandingRedirect />
       {/* Masthead */}
       <header className="border-b border-rule pb-10 mb-12 rise">
         <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted mb-4">
@@ -27,33 +22,24 @@ export default async function Home() {
       {/* Three-column manifesto */}
       <section className="grid md:grid-cols-3 gap-8 md:gap-10 mb-16 rise" style={{ animationDelay: "0.1s" }}>
         <div>
-          <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-oxblood mb-2">
-            I.
-          </div>
+          <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-oxblood mb-2">I.</div>
           <h2 className="font-serif text-lg font-semibold mb-2">Paste</h2>
           <p className="font-serif text-base text-ink/75 leading-relaxed">
-            Drop in any article URL. The kind of long read you keep meaning to
-            come back to.
+            Drop in any article URL. The kind of long read you keep meaning to come back to.
           </p>
         </div>
         <div>
-          <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-oxblood mb-2">
-            II.
-          </div>
+          <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-oxblood mb-2">II.</div>
           <h2 className="font-serif text-lg font-semibold mb-2">Distill</h2>
           <p className="font-serif text-base text-ink/75 leading-relaxed">
-            Gemini reads it for you and writes a four-sentence TL;DR. Plus a
-            handful of tags.
+            Gemini reads it for you and writes a four-sentence TL;DR. Plus a handful of tags.
           </p>
         </div>
         <div>
-          <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-oxblood mb-2">
-            III.
-          </div>
+          <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-oxblood mb-2">III.</div>
           <h2 className="font-serif text-lg font-semibold mb-2">Return</h2>
           <p className="font-serif text-base text-ink/75 leading-relaxed">
-            Browse your list later. Skim what you saved. Open the ones that
-            still pull at you.
+            Browse your list later. Skim what you saved. Open the ones that still pull at you.
           </p>
         </div>
       </section>
