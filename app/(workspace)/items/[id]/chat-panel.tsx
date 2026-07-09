@@ -135,13 +135,13 @@ export function ChatPanel({
     <>
       <button
         onClick={() => onOpenChange(!open)}
-        className="fixed bottom-6 right-6 z-40 border border-rule bg-paper px-4 py-2 font-mono text-[10px] tracking-[0.15em] uppercase text-ink hover:border-oxblood hover:text-oxblood transition-colors"
+        className="fixed bottom-20 right-6 md:bottom-6 z-50 border border-rule bg-paper px-4 py-2 font-mono text-[10px] tracking-[0.15em] uppercase text-ink hover:border-oxblood hover:text-oxblood transition-colors"
       >
         {open ? "Close" : "Ask"}
       </button>
 
       {open && (
-        <div className="fixed bottom-20 right-6 z-40 w-[360px] max-h-[70vh] flex flex-col border border-rule bg-paper">
+        <div className="fixed bottom-36 right-6 md:bottom-20 z-50 w-[calc(100vw-3rem)] max-w-[360px] max-h-[70vh] flex flex-col border border-rule bg-paper">
           {/* Thread switcher */}
           {passageThreads.length > 0 && (
             <div className="flex flex-wrap gap-x-3 gap-y-1 px-4 pt-4 font-mono text-[10px] tracking-[0.12em] uppercase">
