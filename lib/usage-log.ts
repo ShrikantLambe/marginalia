@@ -1,9 +1,9 @@
 import "server-only";
 import { supabase } from "./supabase";
 
-const DAILY_LIMIT = 150;
+const DAILY_LIMIT = 400;
 
-export type Operation = "summarize" | "embed" | "cluster-name" | "synthesize" | "editorial-note";
+export type Operation = "summarize" | "embed" | "cluster-name" | "synthesize" | "editorial-note" | "chat" | "chat-insight";
 
 /**
  * Atomically checks the daily limit and logs the operation in one round-trip.

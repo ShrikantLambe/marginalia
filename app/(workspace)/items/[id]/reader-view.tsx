@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import type { ReadingItem, ArticleHighlight } from "@/lib/supabase";
+import type { ReadingItem, ArticleHighlight, ChatMessage } from "@/lib/supabase";
+import { ChatPanel } from "./chat-panel";
 
 type Status = "queued" | "reading" | "read" | "archived";
 const STATUS_CYCLE: Status[] = ["queued", "reading", "read", "archived"];
@@ -97,9 +98,13 @@ export function ReaderView({
   const [saving, setSaving] = useState(false);
   const [fetchingArticle, setFetchingArticle] = useState(false);
   const [notesValue, setNotesValue] = useState(item.notes ?? "");
+  const [chatOpen, setChatOpen] = useState(false);
+  const [activeHighlightId, setActiveHighlightId] = useState<string | null>(null);
+  const [pendingInsight, setPendingInsight] = useState<ChatMessage | null>(null);
   const articleRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const articleHtmlSet = useRef(false);
+  const insightFiredRef = useRef(false);
 
   const status = (item.status ?? "unread") as Status;
 
@@ -186,6 +191,80 @@ export function ReaderView({
       setNoteText("");
     }
   }
+
+  async function discussPassage() {
+    if (!toolbar.visible) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/items/${item.id}/highlights`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: toolbar.text, note: null }),
+      });
+      if (res.ok) {
+        const newH: ArticleHighlight = await res.json();
+        setHighlights((prev) => [...prev, newH]);
+        window.getSelection()?.removeAllRanges();
+        setActiveHighlightId(newH.id);
+        setChatOpen(true);
+      }
+    } finally {
+      setSaving(false);
+      setToolbar({ visible: false });
+      setNoteText("");
+    }
+  }
+
+  // ── Reading-behavior insight ────────────────────────────────────────────────
+  // Fires at most once per page view: reader has stopped scrolling for a while
+  // mid-article (not just landed, not already at the end).
+
+  useEffect(() => {
+    if (!item.article_text) return;
+    let lastY = window.scrollY;
+    let lastMoveAt = Date.now();
+    let ticking = false;
+
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const y = window.scrollY;
+        if (Math.abs(y - lastY) > 40) {
+          lastY = y;
+          lastMoveAt = Date.now();
+        }
+        ticking = false;
+      });
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+
+    const interval = setInterval(async () => {
+      if (insightFiredRef.current) return;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const scrollDepthPct = docHeight > 0 ? (window.scrollY / docHeight) * 100 : 0;
+      const stallMs = Date.now() - lastMoveAt;
+      if (stallMs >= 25_000 && scrollDepthPct >= 15 && scrollDepthPct <= 95) {
+        insightFiredRef.current = true;
+        const res = await fetch(`/api/items/${item.id}/insight`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contextNote: `${Math.round(stallMs / 1000)}s dwell · ${Math.round(scrollDepthPct)}% scroll depth`,
+          }),
+        });
+        if (res.ok) {
+          setPendingInsight(await res.json());
+          setChatOpen(true);
+        }
+      }
+    }, 3_000);
+
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      clearInterval(interval);
+    };
+  }, [item.article_text, item.id]);
 
   async function deleteHighlight(hid: string) {
     // Optimistic remove from DOM first for snappiness
@@ -515,10 +594,29 @@ export function ReaderView({
               >
                 + Note
               </button>
+              <span className="opacity-30">|</span>
+              <button
+                onClick={discussPassage}
+                disabled={saving}
+                className="hover:text-oxblood/80 transition-colors disabled:opacity-40"
+              >
+                Discuss
+              </button>
             </div>
           )}
         </div>
       )}
+
+      {/* ── AI chat panel ────────────────────────────────────────────── */}
+      <ChatPanel
+        itemId={item.id}
+        highlights={highlights}
+        open={chatOpen}
+        onOpenChange={setChatOpen}
+        activeHighlightId={activeHighlightId}
+        onActiveHighlightChange={setActiveHighlightId}
+        pendingInsight={pendingInsight}
+      />
     </div>
   );
 }

@@ -63,6 +63,18 @@ export type ReadingItem = {
 
 export type SearchResult = ReadingItem & { similarity: number };
 
+export type ChatMessage = {
+  id: string;
+  user_id: string;
+  item_id: string;
+  highlight_id: string | null;
+  role: "user" | "assistant";
+  content: string;
+  trigger: "manual" | "proactive";
+  context_note: string | null;
+  created_at: string;
+};
+
 export type Synthesis = {
   id: string;
   user_id: string;
