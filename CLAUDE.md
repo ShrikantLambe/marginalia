@@ -53,7 +53,7 @@ POST /api/items
 - `items/[id]/` — reader view; `page.tsx` fetches item + highlights server-side, `reader-view.tsx` is `"use client"`
 - `briefs/` — question-driven collections list (client component); `briefs/[id]/` — brief detail + candidate items
 - `search/` — semantic search (client component, debounced 300ms)
-- `index/` — tag-indexed article list (Server Component, A–Z grouped)
+- `tags/` — tag-indexed article list (Server Component, A–Z grouped; rail label "Index"). Was `index/` — renamed because a static root page prerenders to `index.html`, which shadows a dynamic `/index` route on Vercel.
 - `discover/` — guardrailed web search through user-trusted sources; captures via POST /api/items
 - `sources/` — the Discover allowlist: trusted domains + authors, brief pins, library suggestions, guardrail log
 

@@ -56,7 +56,7 @@ export function LeftRail() {
     { href: "/search",    icon: Search,   label: "Search"   },
     { href: "/discover",  icon: Compass,  label: "Discover" },
     { href: "/sources",   icon: Globe,    label: "Sources"  },
-    { href: "/index",     icon: Archive,  label: "Index"    },
+    { href: "/tags",      icon: Archive,  label: "Index"    },
     { href: "/briefs",    icon: Bookmark, label: "Briefs"   },
     { href: "/synthesis", icon: PenTool,  label: "Drafts"   },
   ];
