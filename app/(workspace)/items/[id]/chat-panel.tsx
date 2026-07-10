@@ -135,9 +135,9 @@ export function ChatPanel({
     <>
       <button
         onClick={() => onOpenChange(!open)}
-        className="fixed bottom-20 right-6 md:bottom-6 z-50 border border-rule bg-paper px-4 py-2 font-mono text-[10px] tracking-[0.15em] uppercase text-ink hover:border-oxblood hover:text-oxblood transition-colors"
+        className="fixed bottom-20 right-6 md:bottom-6 z-50 border border-oxblood bg-paper px-4 py-2 font-mono text-[10px] tracking-[0.15em] uppercase text-oxblood hover:bg-oxblood hover:text-paper transition-colors"
       >
-        {open ? "Close" : "Ask"}
+        {open ? "Close" : "Ask AI"}
       </button>
 
       {open && (
