@@ -12,7 +12,7 @@ export async function GET(_req: Request) {
 
   const fourteenDaysAgo = new Date(Date.now() - 14 * 86_400_000).toISOString();
 
-  const [itemsRes, synthesesRes, searchesRes, unreadRes] = await Promise.all([
+  const [itemsRes, synthesesRes, searchesRes, unreadRes, sourcesRes] = await Promise.all([
     supabase
       .from("reading_list")
       .select("id, title, status, scroll_progress, last_opened_at")
@@ -39,6 +39,10 @@ export async function GET(_req: Request) {
       .select("*", { count: "exact", head: true })
       .eq("user_id", user.id)
       .eq("status", "queued"),
+    supabase
+      .from("sources")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id),
   ]);
 
   // resume_search suppression: did the user capture anything from the latest
@@ -71,6 +75,7 @@ export async function GET(_req: Request) {
     searches: searchesRes.data ?? [],
     capturedFromLastSearch,
     unreadCount: unreadRes.count ?? 0,
+    sourceCount: sourcesRes.count ?? 0,
   });
 
   return NextResponse.json(state);

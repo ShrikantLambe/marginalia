@@ -7,7 +7,8 @@ export type WelcomeSuggestion =
   | { type: "resume_reading"; itemId: string; title: string; progressPct: number }
   | { type: "resume_draft"; id: string; title: string }
   | { type: "resume_search"; query: string; scope: unknown }
-  | { type: "review_unread"; count: number };
+  | { type: "review_unread"; count: number }
+  | { type: "setup_discover" };
 
 export type WelcomeState = {
   suggestions: WelcomeSuggestion[];
@@ -30,6 +31,7 @@ export type WelcomeInputs = {
   /** URLs of items captured after the most recent search that appeared in that search's cached results */
   capturedFromLastSearch: boolean;
   unreadCount: number;
+  sourceCount: number;
 };
 
 const DAY_MS = 86_400_000;
@@ -82,6 +84,11 @@ export function computeWelcomeState(input: WelcomeInputs): WelcomeState {
   // 4. review_unread — only when the queue is actually piling up
   if (suggestions.length < 3 && unreadCount > 5) {
     suggestions.push({ type: "review_unread", count: unreadCount });
+  }
+
+  // 5. Nothing to resume and Discover never set up → a single onboarding card
+  if (suggestions.length === 0 && input.sourceCount === 0) {
+    suggestions.push({ type: "setup_discover" });
   }
 
   // lastSeenAt: newest activity timestamp that is ≥ 4 hours old

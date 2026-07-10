@@ -5,15 +5,28 @@ const NOW = new Date("2026-07-09T09:00:00Z");
 const hoursAgo = (h: number) => new Date(NOW.getTime() - h * 3_600_000).toISOString();
 
 function base(overrides: Partial<WelcomeInputs> = {}): WelcomeInputs {
-  return { now: NOW, items: [], syntheses: [], searches: [], capturedFromLastSearch: false, unreadCount: 0, ...overrides };
+  return { now: NOW, items: [], syntheses: [], searches: [], capturedFromLastSearch: false, unreadCount: 0, sourceCount: 3, ...overrides };
 }
 
 describe("computeWelcomeState", () => {
-  it("returns greeting-only for a brand-new user", () => {
+  it("returns greeting-only for a brand-new user with sources", () => {
     const state = computeWelcomeState(base());
     expect(state.suggestions).toEqual([]);
     expect(state.shouldShowWelcome).toBe(true);
     expect(state.lastSeenAt).toBeNull();
+  });
+
+  it("offers Discover setup when there is nothing to resume and zero sources", () => {
+    const state = computeWelcomeState(base({ sourceCount: 0 }));
+    expect(state.suggestions).toEqual([{ type: "setup_discover" }]);
+  });
+
+  it("does not offer Discover setup when something real is resumable", () => {
+    const state = computeWelcomeState(base({
+      sourceCount: 0,
+      items: [{ id: "a", title: "T", status: "reading", scroll_progress: 50, last_opened_at: hoursAgo(10) }],
+    }));
+    expect(state.suggestions.some((s) => s.type === "setup_discover")).toBe(false);
   });
 
   it("suggests resuming a half-read article, most recent first", () => {

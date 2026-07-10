@@ -84,6 +84,12 @@ export function WelcomePanel({ userName }: { userName: string }) {
             {s.count} unread items waiting
           </Link>
         );
+      case "setup_discover":
+        return (
+          <Link href="/sources" className="block font-serif text-[14px] text-ink/85 hover:text-oxblood transition-colors">
+            Set up Discover sources — search the web through sites you trust
+          </Link>
+        );
     }
   }
 
