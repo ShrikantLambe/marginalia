@@ -38,7 +38,8 @@ export async function GET(_req: Request) {
       domainCounts.set(domain, (domainCounts.get(domain) ?? 0) + 1);
     }
     const author = item.author?.trim();
-    if (author && author.length > 2 && !existingAuthors.has(author.toLowerCase())) {
+    // Single-token names ("Joe") are junk suggestions — require at least two words
+    if (author && author.includes(" ") && !existingAuthors.has(author.toLowerCase())) {
       authorCounts.set(author, (authorCounts.get(author) ?? 0) + 1);
     }
   }

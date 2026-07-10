@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { stackServerApp } from "@/stack";
 import { supabase } from "@/lib/supabase";
-import { fetchAndSummarize } from "@/lib/summarize";
+import { fetchAndSummarize, ExtractionError } from "@/lib/summarize";
 import { embed, buildEmbeddingText, EMBEDDING_MODEL } from "@/lib/embeddings";
 import { checkAndLog, logUsage } from "@/lib/usage-log";
 
@@ -19,7 +19,7 @@ export async function POST(
 
   const { data: item } = await supabase
     .from("reading_list")
-    .select("url")
+    .select("url, status")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
@@ -35,6 +35,11 @@ export async function POST(
     }
 
     const updates: Record<string, unknown> = { title, summary, tags };
+    // A successful retry clears the failed state
+    if (item.status === "failed") {
+      updates.status = "queued";
+      updates.failure_reason = null;
+    }
 
     try {
       const vector = await embed(buildEmbeddingText(title, summary, tags));
@@ -57,6 +62,15 @@ export async function POST(
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json(data);
   } catch (e) {
+    // Retry failed the same way — refresh the reason, stay in failed state
+    if (e instanceof ExtractionError) {
+      await supabase
+        .from("reading_list")
+        .update({ status: "failed", failure_reason: e.reason })
+        .eq("id", id)
+        .eq("user_id", user.id);
+      return NextResponse.json({ error: e.message, stillFailed: true }, { status: 422 });
+    }
     const message = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ error: message }, { status: 500 });
   }

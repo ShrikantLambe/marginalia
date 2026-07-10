@@ -2,12 +2,73 @@
 
 import { useState, useEffect } from "react";
 import type { Source, Brief } from "@/lib/supabase";
+import { PageHeader } from "@/app/components/PageHeader";
 
 type BriefLite = Pick<Brief, "id" | "question" | "status">;
 type Suggestion = { value: string; count: number };
 type Violation = { url: string; query: string; created_at: string };
 
 const CHROME = "font-mono text-[10px] tracking-[0.15em] uppercase text-muted";
+
+function SourceRow({
+  s, briefs, briefName, onSetBrief, onRemove,
+}: {
+  s: Source; briefs: BriefLite[];
+  briefName: (id: string | null) => string | undefined;
+  onSetBrief: (id: string, briefId: string | null) => void;
+  onRemove: (id: string) => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <li className="group/src flex items-start justify-between gap-3 py-2 border-b border-rule/60">
+      <div className="min-w-0">
+        <span className="font-serif text-[15px] text-ink">{s.value}</span>
+        {s.type === "author" && (s.home_domains?.length ?? 0) > 0 && (
+          <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
+            {s.home_domains!.map((d) => (
+              <span key={d} className="font-mono text-[9px] tracking-[0.08em] border border-rule text-muted px-1 py-px">
+                {d}
+              </span>
+            ))}
+          </span>
+        )}
+        {s.brief_id && briefName(s.brief_id) && (
+          <div className="font-serif italic text-[12px] text-muted truncate">↳ {briefName(s.brief_id)}</div>
+        )}
+      </div>
+      <div className="flex items-center gap-3 flex-shrink-0">
+        <label className="flex items-center gap-1.5">
+          <span className="font-mono text-[9px] tracking-[0.15em] uppercase text-muted">Brief</span>
+          <select
+            value={s.brief_id ?? ""}
+            onChange={(e) => onSetBrief(s.id, e.target.value || null)}
+            className="bg-transparent border border-rule font-mono text-[10px] text-muted px-1 py-0.5 max-w-[140px]"
+          >
+            <option value="">All</option>
+            {briefs.map((b) => (
+              <option key={b.id} value={b.id}>{b.question.slice(0, 40)}</option>
+            ))}
+          </select>
+        </label>
+        {confirming ? (
+          <span className="font-mono text-[10px] tracking-[0.08em] text-muted">
+            Remove?{" "}
+            <button onClick={() => onRemove(s.id)} className="text-oxblood hover:text-ink transition-colors">y</button>
+            {" / "}
+            <button onClick={() => setConfirming(false)} className="hover:text-ink transition-colors">n</button>
+          </span>
+        ) : (
+          <button
+            onClick={() => setConfirming(true)}
+            className="opacity-0 group-hover/src:opacity-100 focus-visible:opacity-100 transition-opacity font-mono text-muted hover:text-oxblood text-xs"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+    </li>
+  );
+}
 
 export function SourcesView({ briefs }: { briefs: BriefLite[] }) {
   const [sources, setSources] = useState<Source[]>([]);
@@ -94,47 +155,12 @@ export function SourcesView({ briefs }: { briefs: BriefLite[] }) {
   const domains = sources.filter((s) => s.type === "domain");
   const authors = sources.filter((s) => s.type === "author");
   const briefName = (id: string | null) => briefs.find((b) => b.id === id)?.question;
-
-  function SourceRow({ s }: { s: Source }) {
-    return (
-      <li className="group/src flex items-start justify-between gap-3 py-2 border-b border-rule/60">
-        <div className="min-w-0">
-          <span className="font-serif text-[15px] text-ink">{s.value}</span>
-          {s.type === "author" && (s.home_domains?.length ?? 0) > 0 && (
-            <span className="ml-2 font-mono text-[10px] text-sage">{s.home_domains!.join(" · ")}</span>
-          )}
-          {s.brief_id && briefName(s.brief_id) && (
-            <div className="font-serif italic text-[12px] text-muted truncate">↳ {briefName(s.brief_id)}</div>
-          )}
-        </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
-          <select
-            value={s.brief_id ?? ""}
-            onChange={(e) => setBrief(s.id, e.target.value || null)}
-            className="bg-transparent border border-rule font-mono text-[10px] text-muted px-1 py-0.5 max-w-[140px]"
-          >
-            <option value="">All</option>
-            {briefs.map((b) => (
-              <option key={b.id} value={b.id}>{b.question.slice(0, 40)}</option>
-            ))}
-          </select>
-          <button
-            onClick={() => removeSource(s.id)}
-            className="opacity-0 group-hover/src:opacity-100 transition-opacity text-muted hover:text-oxblood text-xs"
-          >
-            ✕
-          </button>
-        </div>
-      </li>
-    );
-  }
+  const BROAD_DOMAINS = ["medium.com", "substack.com", "linkedin.com"];
+  const hasBroadDomain = domains.some((s) => BROAD_DOMAINS.includes(s.value));
 
   return (
     <main className="max-w-3xl px-8 md:px-14 py-10">
-      <h1 className="font-serif text-[28px] font-semibold leading-tight mb-1">Sources</h1>
-      <p className="font-serif italic text-[14px] text-muted mb-10">
-        Add the sites and writers you trust. Discover will only look here.
-      </p>
+      <PageHeader title="Sources" caption="Add the sites and writers you trust. Discover will only look here." />
 
       {error && <p className="font-serif italic text-[13px] text-oxblood mb-4">{error}</p>}
 
@@ -157,7 +183,12 @@ export function SourcesView({ briefs }: { briefs: BriefLite[] }) {
             />
           </form>
         )}
-        <ul>{domains.map((s) => <SourceRow key={s.id} s={s} />)}</ul>
+        <ul>{domains.map((s) => <SourceRow key={s.id} s={s} briefs={briefs} briefName={briefName} onSetBrief={setBrief} onRemove={removeSource} />)}</ul>
+        {hasBroadDomain && (
+          <p className="font-serif italic text-[12px] text-muted/70 mt-2">
+            Broad domain in your list — pair it with authors for sharper results.
+          </p>
+        )}
       </section>
 
       {/* Authors */}
@@ -182,7 +213,7 @@ export function SourcesView({ briefs }: { briefs: BriefLite[] }) {
             </button>
           )}
         </form>
-        <ul>{authors.map((s) => <SourceRow key={s.id} s={s} />)}</ul>
+        <ul>{authors.map((s) => <SourceRow key={s.id} s={s} briefs={briefs} briefName={briefName} onSetBrief={setBrief} onRemove={removeSource} />)}</ul>
       </section>
 
       {/* From your library */}

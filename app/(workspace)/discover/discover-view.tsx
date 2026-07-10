@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import type { Source, Brief, DiscoverResult, DiscoverScope, DiscoverSavedSearch } from "@/lib/supabase";
+import { PageHeader } from "@/app/components/PageHeader";
 
 type BriefLite = Pick<Brief, "id" | "question" | "status">;
 type RecentSearch = { id: string; query: string; scope: DiscoverScope; created_at: string };
@@ -15,9 +16,11 @@ const CHIP = "font-mono text-[10px] tracking-[0.12em] uppercase px-2 py-1 border
 export function DiscoverView({
   initialSources,
   briefs,
+  trySuggestions = [],
 }: {
   initialSources: Source[];
   briefs: BriefLite[];
+  trySuggestions?: string[];
 }) {
   const [sources] = useState<Source[]>(initialSources);
   const [query, setQuery] = useState("");
@@ -193,10 +196,7 @@ export function DiscoverView({
 
   return (
     <main className="max-w-3xl px-8 md:px-14 py-10 pb-24">
-      <h1 className="font-serif text-[28px] font-semibold leading-tight mb-1">Discover</h1>
-      <p className="font-serif italic text-[14px] text-muted mb-8">
-        The web, through your sources. Your library lives in <Link href="/search" className="underline hover:text-ink">Search</Link>.
-      </p>
+      <PageHeader title="Discover" caption="The web, through your sources — your library lives in Search." />
 
       {zeroSources ? (
         <div className="border border-rule p-6">
@@ -326,19 +326,55 @@ export function DiscoverView({
             </p>
           )}
 
-          {/* Recents when input empty and no results */}
-          {!results && !searching && !error && recent.length > 0 && !query && (
-            <div className="mb-8">
-              <div className={`${CHROME} mb-2`}>Recent</div>
-              <ul className="space-y-1">
-                {recent.map((r) => (
-                  <li key={r.id}>
-                    <button onClick={() => rerun(r.query, r.scope)} className="font-serif text-[14px] text-ink/80 hover:text-oxblood transition-colors">
-                      {r.query}
+          {/* Empty state: the product introducing itself — saved, recent, try */}
+          {!results && !searching && !error && !query && (
+            <div className="space-y-8">
+              {recent.length > 0 && (
+                <div>
+                  <div className={`${CHROME} mb-2 flex items-center gap-3`}>
+                    <span>Recent</span>
+                    <button
+                      onClick={async () => {
+                        setRecent([]);
+                        await fetch("/api/discover/recent", { method: "DELETE" }).catch(() => {});
+                      }}
+                      className="text-muted/60 hover:text-oxblood transition-colors normal-case tracking-normal"
+                    >
+                      clear all
                     </button>
-                  </li>
-                ))}
-              </ul>
+                  </div>
+                  <ul className="space-y-1">
+                    {recent.slice(0, 5).map((r) => (
+                      <li key={r.id}>
+                        <button onClick={() => rerun(r.query, r.scope)} className="font-serif text-[14px] text-ink/80 hover:text-oxblood transition-colors">
+                          {r.query}
+                          <span className="font-mono text-[9px] tracking-[0.12em] uppercase text-muted ml-2">
+                            {r.scope?.mode === "brief" ? "brief" : r.scope?.mode === "custom" ? "custom" : "all sources"}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {trySuggestions.length > 0 && (
+                <div>
+                  <div className={`${CHROME} mb-2`}>Try</div>
+                  <p className="font-serif text-[14px] text-ink/80">
+                    {trySuggestions.map((tag, i) => (
+                      <span key={tag}>
+                        {i > 0 && <span className="text-muted"> · </span>}
+                        <button
+                          onClick={() => { applyScope({ mode: "all" }); rerun(tag, { mode: "all" }); }}
+                          className="hover:text-oxblood transition-colors"
+                        >
+                          “{tag}”
+                        </button>
+                      </span>
+                    ))}
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

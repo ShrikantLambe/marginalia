@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { stackServerApp } from "@/stack";
 import { supabase } from "@/lib/supabase";
+import { PageHeader } from "@/app/components/PageHeader";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,6 +19,7 @@ export default async function IndexPage() {
     .from("reading_list")
     .select("id, title, url, tags, status, created_at, reading_time_minutes")
     .eq("user_id", user.id)
+    .neq("status", "failed")
     .order("title", { ascending: true });
 
   if (!items?.length) {
@@ -58,16 +60,11 @@ export default async function IndexPage() {
   const letters = Object.keys(letterGroups).sort();
 
   return (
-    <div className="max-w-3xl mx-auto px-8 py-10">
-      {/* Header */}
-      <div className="mb-10">
-        <h1 className="font-serif text-[28px] font-semibold mb-1">
-          Marg<span className="text-oxblood">i</span>nalia
-        </h1>
-        <p className="font-mono text-[10px] tracking-[0.15em] uppercase text-muted">
-          Index — {items.length} {items.length === 1 ? "entry" : "entries"} · {sortedTags.length} {sortedTags.length === 1 ? "tag" : "tags"}
-        </p>
-      </div>
+    <div className="max-w-3xl px-8 md:px-14 py-10">
+      <PageHeader
+        title="Index"
+        caption={`${items.length} ${items.length === 1 ? "entry" : "entries"} · ${sortedTags.length} ${sortedTags.length === 1 ? "tag" : "tags"}, A–Z`}
+      />
 
       {/* Letter index navigation */}
       {letters.length > 0 && (

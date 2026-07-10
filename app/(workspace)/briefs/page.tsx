@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Brief } from "@/lib/supabase";
+import { PageHeader } from "@/app/components/PageHeader";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -53,16 +54,8 @@ export default function BriefsPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-8 py-10">
-      {/* Header */}
-      <div className="mb-10">
-        <h1 className="font-serif text-[28px] font-semibold mb-1">
-          Marg<span className="text-oxblood">i</span>nalia
-        </h1>
-        <p className="font-mono text-[10px] tracking-[0.15em] uppercase text-muted">
-          Briefs — reading with intent
-        </p>
-      </div>
+    <div className="max-w-3xl px-8 md:px-14 py-10">
+      <PageHeader title="Briefs" caption="Reading with intent — what are you reading toward?" />
 
       {/* Create input */}
       <form onSubmit={createBrief} className="mb-10">
@@ -102,11 +95,24 @@ export default function BriefsPage() {
       {loading ? (
         <p className="font-serif italic text-muted text-[16px]">Loading…</p>
       ) : briefs.length === 0 ? (
-        <p className="font-serif italic text-muted text-[16px] leading-relaxed">
-          {statusFilter === "open"
-            ? "No open briefs. What are you reading toward?"
-            : "No briefs yet."}
-        </p>
+        <div>
+          <p className="font-serif italic text-muted text-[16px] leading-relaxed mb-3">
+            {statusFilter === "open"
+              ? "No open briefs. What are you reading toward?"
+              : "No briefs yet."}
+          </p>
+          {statusFilter === "open" && (
+            <button
+              onClick={() => {
+                setQuestion("Why do data platforms fail after the pilot?");
+                inputRef.current?.focus();
+              }}
+              className="font-serif italic text-[15px] text-muted/60 hover:text-oxblood transition-colors text-left"
+            >
+              e.g. — Why do data platforms fail after the pilot?
+            </button>
+          )}
+        </div>
       ) : (
         <ul className="space-y-0">
           {briefs.map((brief, i) => (

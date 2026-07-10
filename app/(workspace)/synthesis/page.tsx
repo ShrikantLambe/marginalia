@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import type { Synthesis } from "@/lib/supabase";
+import { PageHeader } from "@/app/components/PageHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -19,13 +20,8 @@ export default async function SynthesesPage() {
   const syntheses = (data ?? []) as Synthesis[];
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-10 md:py-14">
-      <header className="border-b border-rule pb-6 mb-10">
-        <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted mb-1">
-          <Link href="/dashboard" className="hover:text-ink transition-colors">← Dashboard</Link>
-        </div>
-        <h1 className="font-serif text-3xl font-semibold tracking-tight">Past Drafts</h1>
-      </header>
+    <main className="max-w-3xl px-8 md:px-14 py-10">
+      <PageHeader title="Past Drafts" caption="Syntheses drawn from your reading." />
 
       {syntheses.length === 0 ? (
         <p className="font-serif italic text-ink/50 text-lg text-center py-20">
@@ -44,7 +40,7 @@ export default async function SynthesesPage() {
                   {s.source_item_ids.length} article{s.source_item_ids.length !== 1 ? "s" : ""}
                 </div>
                 <h2 className="font-serif text-xl font-semibold group-hover:text-oxblood transition-colors">
-                  {s.title ?? "Untitled draft"}
+                  {s.title || `Draft · ${new Date(s.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}
                 </h2>
                 {s.prompt && (
                   <p className="font-serif italic text-ink/60 text-sm mt-1">{s.prompt}</p>

@@ -58,7 +58,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  let results = (data ?? []) as Array<Record<string, unknown>>;
+  // Failed extractions never participate in semantic search (their embeddings
+  // are deleted, but belt-and-suspenders here too)
+  let results = ((data ?? []) as Array<Record<string, unknown>>).filter(
+    (r) => r.status !== "failed"
+  );
 
   if (statusFilter?.length) {
     results = results.filter((r) => statusFilter.includes(r.status as string));

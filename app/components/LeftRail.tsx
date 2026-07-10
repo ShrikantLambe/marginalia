@@ -1,69 +1,43 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { UserButton } from "@stackframe/stack";
-import { Search, BookOpen, Bookmark, Archive, PenTool, Plus, Inbox, ChevronDown, ChevronRight, Compass, Globe } from "lucide-react";
+import { Search, Archive, PenTool, Plus, Inbox, ChevronDown, ChevronRight, Compass, Globe, Bookmark } from "lucide-react";
 import { QuickSaveModal } from "@/app/components/QuickSaveModal";
-import type { Project } from "@/lib/supabase";
+import type { Brief } from "@/lib/supabase";
 
 export function LeftRail() {
   const pathname = usePathname();
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const activeProjectId = searchParams.get("project");
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [projectsOpen, setProjectsOpen] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [newEmoji, setNewEmoji] = useState("📁");
-  const [newName, setNewName] = useState("");
-  const createInputRef = useRef<HTMLInputElement>(null);
+  const [briefs, setBriefs] = useState<Brief[]>([]);
+  const [briefsOpen, setBriefsOpen] = useState(true);
 
+  // Refresh on navigation so a just-created brief appears immediately
   useEffect(() => {
-    fetch("/api/projects")
+    fetch("/api/briefs?status=open")
       .then(r => r.ok ? r.json() : [])
-      .then(data => setProjects(Array.isArray(data) ? data : []))
+      .then(data => setBriefs(Array.isArray(data) ? data : []))
       .catch(() => {});
-  }, []);
+  }, [pathname]);
 
-  useEffect(() => {
-    if (creating) setTimeout(() => createInputRef.current?.focus(), 50);
-  }, [creating]);
-
-  async function createProject(e: React.FormEvent) {
-    e.preventDefault();
-    const name = newName.trim();
-    if (!name) return;
-    const res = await fetch("/api/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, emoji: newEmoji }),
-    });
-    if (res.ok) {
-      const p: Project = await res.json();
-      setProjects(prev => [...prev, p]);
-      setNewName(""); setNewEmoji("📁"); setCreating(false);
-      router.push(`/dashboard?project=${p.id}`);
-    }
-  }
-
-  const isInbox = pathname === "/dashboard" && !activeProjectId;
+  const isInbox = pathname === "/dashboard";
 
   const LIBRARY = [
     { href: "/search",    icon: Search,   label: "Search"   },
     { href: "/discover",  icon: Compass,  label: "Discover" },
     { href: "/sources",   icon: Globe,    label: "Sources"  },
     { href: "/tags",      icon: Archive,  label: "Index"    },
-    { href: "/briefs",    icon: Bookmark, label: "Briefs"   },
     { href: "/synthesis", icon: PenTool,  label: "Drafts"   },
   ];
 
   function isLibraryActive(href: string) {
     return pathname === href || pathname.startsWith(href + "/");
   }
+
+  const visibleBriefs = briefs.slice(0, 7);
 
   return (
     <>
@@ -88,6 +62,7 @@ export function LeftRail() {
           {/* Inbox */}
           <Link
             href="/dashboard"
+            aria-current={isInbox ? "page" : undefined}
             className={`flex items-center justify-between px-2 py-1.5 rounded-sm transition-colors group ${isInbox ? "text-ink" : "text-muted hover:text-ink"}`}
           >
             <div className="flex items-center gap-2">
@@ -97,74 +72,52 @@ export function LeftRail() {
             </div>
           </Link>
 
-          {/* Projects section */}
+          {/* Briefs — the one place reading intent lives */}
           <div className="pt-3">
             <div className="flex items-center justify-between px-2 mb-1">
               <button
-                onClick={() => setProjectsOpen(v => !v)}
+                onClick={() => setBriefsOpen(v => !v)}
                 className="flex items-center gap-1 font-mono text-[9px] tracking-[0.15em] uppercase text-muted hover:text-ink transition-colors"
               >
-                {projectsOpen ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
-                Projects
+                {briefsOpen ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                Briefs
               </button>
-              <button
-                onClick={() => { setProjectsOpen(true); setCreating(true); }}
+              <Link
+                href="/briefs"
                 className="text-muted hover:text-oxblood transition-colors"
-                title="New project"
+                title="New brief"
               >
                 <Plus size={11} strokeWidth={2.5} />
-              </button>
+              </Link>
             </div>
 
-            {projectsOpen && (
+            {briefsOpen && (
               <div className="space-y-0.5">
-                {projects.map(p => {
-                  const active = activeProjectId === p.id && pathname === "/dashboard";
+                {visibleBriefs.map(b => {
+                  const active = pathname === `/briefs/${b.id}`;
                   return (
                     <Link
-                      key={p.id}
-                      href={`/dashboard?project=${p.id}`}
-                      className={`relative flex items-center justify-between px-2 py-1.5 rounded-sm transition-colors group ${active ? "text-ink" : "text-muted hover:text-ink"}`}
+                      key={b.id}
+                      href={`/briefs/${b.id}`}
+                      aria-current={active ? "page" : undefined}
+                      className={`relative flex items-center px-2 py-1.5 rounded-sm transition-colors ${active ? "text-ink" : "text-muted hover:text-ink"}`}
                     >
                       {active && <span className="absolute left-[-12px] w-[3px] h-5 bg-oxblood rounded-r" />}
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-[13px] flex-shrink-0">{p.emoji}</span>
-                        <span className="font-serif text-[13px] truncate">{p.name}</span>
-                      </div>
-                      {p.item_count !== undefined && (
-                        <span className="font-mono text-[10px] text-muted flex-shrink-0 ml-1">{p.item_count}</span>
-                      )}
+                      <span className="font-serif italic text-[13px] truncate">{b.question}</span>
                     </Link>
                   );
                 })}
 
-                {/* Inline create form */}
-                {creating && (
-                  <form onSubmit={createProject} className="flex items-center gap-1 px-2 py-1">
-                    <input
-                      type="text"
-                      value={newEmoji}
-                      onChange={e => setNewEmoji(e.target.value)}
-                      maxLength={2}
-                      className="w-7 bg-transparent text-[13px] text-center outline-none border-b border-rule focus:border-oxblood"
-                    />
-                    <input
-                      ref={createInputRef}
-                      type="text"
-                      value={newName}
-                      onChange={e => setNewName(e.target.value)}
-                      onKeyDown={e => { if (e.key === "Escape") { setCreating(false); setNewName(""); } }}
-                      placeholder="Project name"
-                      className="flex-1 bg-transparent font-serif text-[13px] outline-none border-b border-rule focus:border-oxblood placeholder:text-muted/50 min-w-0"
-                    />
-                    <button type="submit" className="font-mono text-[10px] text-muted hover:text-ink">↵</button>
-                  </form>
+                {briefs.length > 7 && (
+                  <Link href="/briefs" className="block px-2 py-1 font-mono text-[9px] tracking-[0.12em] uppercase text-muted hover:text-ink transition-colors">
+                    All briefs →
+                  </Link>
                 )}
 
-                {projects.length === 0 && !creating && (
-                  <p className="px-2 py-1 font-serif italic text-[12px] text-muted/60">
-                    No projects yet
-                  </p>
+                {briefs.length === 0 && (
+                  <Link href="/briefs" className="block px-2 py-1 font-serif italic text-[12px] text-muted/60 hover:text-ink transition-colors">
+                    No open briefs — what are you reading toward?
+                  </Link>
                 )}
               </div>
             )}
@@ -182,6 +135,7 @@ export function LeftRail() {
                   <Link
                     key={href}
                     href={href}
+                    aria-current={active ? "page" : undefined}
                     className={`relative flex items-center gap-2 px-2 py-1.5 rounded-sm transition-colors ${active ? "text-ink" : "text-muted hover:text-ink"}`}
                   >
                     {active && <span className="absolute left-[-12px] w-[3px] h-5 bg-oxblood rounded-r" />}

@@ -16,8 +16,8 @@ export default async function DashboardPage({
   const params = await searchParams;
   const projectId = params.project ?? null;
 
-  // Fetch all items, projects, project assignments, and themes in parallel
-  const [itemsResult, themesResult, projectsResult, assignmentsResult] = await Promise.all([
+  // Fetch all items, projects, project assignments, themes, and recent highlights in parallel
+  const [itemsResult, themesResult, projectsResult, assignmentsResult, highlightsResult] = await Promise.all([
     supabase
       .from("reading_list")
       .select("*")
@@ -38,6 +38,12 @@ export default async function DashboardPage({
     supabase
       .from("project_items")
       .select("item_id, project_id"),
+    supabase
+      .from("highlights")
+      .select("id, text, item_id")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(3),
   ]);
 
   if (itemsResult.error) console.error("[dashboard] items error:", itemsResult.error.message);
@@ -60,6 +66,11 @@ export default async function DashboardPage({
     items = allItems.filter(i => !assignedAnywhere.has(i.id));
   }
 
+  const recentMargins = (highlightsResult.data ?? []).map(h => ({
+    ...h,
+    title: allItems.find(i => i.id === h.item_id)?.title ?? null,
+  }));
+
   const displayName = user.displayName ?? user.primaryEmail?.split("@")[0] ?? "reader";
   const activeProject = projectId ? projects.find(p => p.id === projectId) : null;
   const projectName = activeProject ? `${activeProject.emoji} ${activeProject.name}` : undefined;
@@ -72,6 +83,7 @@ export default async function DashboardPage({
       projectId={projectId ?? undefined}
       projects={projects}
       projectName={projectName}
+      recentMargins={recentMargins}
     />
   );
 }

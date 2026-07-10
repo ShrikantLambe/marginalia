@@ -49,7 +49,7 @@ POST /api/items
 **Workspace layout:** All authenticated pages live under `app/(workspace)/` and share a left rail navigation ([app/(workspace)/layout.tsx](app/(workspace)/layout.tsx) + `app/components/LeftRail.tsx`). The rail is 60px wide on desktop; on mobile a bottom tab bar replaces it.
 
 **Pages in `app/(workspace)/`:**
-- `dashboard/` — reading list; `page.tsx` is a Server Component (auth + fetch), `reading-list.tsx` is `"use client"` (all interactive state)
+- `dashboard/` — reading list; `page.tsx` is a Server Component (auth + fetch), `reading-list.tsx` is `"use client"` (all interactive state). One smart capture bar (URL → capture, text → concept search); welcome panel + recent margins live in the right column pre-selection. Failed extractions render under a "Needs attention" tab.
 - `items/[id]/` — reader view; `page.tsx` fetches item + highlights server-side, `reader-view.tsx` is `"use client"`
 - `briefs/` — question-driven collections list (client component); `briefs/[id]/` — brief detail + candidate items
 - `search/` — semantic search (client component, debounced 300ms)
@@ -140,6 +140,7 @@ POST /api/items
 | 015 | chat_messages table (in-reader Q&A, passage threads, proactive insights) |
 | 016 | Discover: sources, guardrail violations, query cache, search log, saved searches |
 | 017 | scroll_progress column on reading_list (Welcome Back reading progress) |
+| 018 | 'failed' status + failure_reason; data-fix for corrupt failure-text summaries; draft title backfill |
 
 **Supabase client** uses `service_role` key server-side only — bypasses RLS. All tables have RLS explicitly disabled. Never send `SUPABASE_SERVICE_ROLE_KEY` to the client.
 

@@ -149,10 +149,13 @@ export async function POST(req: Request) {
 /** Dedupe against the library via the (user_id, url) uniqueness — flag, don't remove. */
 async function attachLibraryState(userId: string, results: DiscoverResult[]): Promise<DiscoverResult[]> {
   if (!results.length) return results;
+  // Failed captures stay OUT of dedupe — a retry-worthy URL must not be
+  // flagged "in your library"
   const { data: existing } = await supabase
     .from("reading_list")
     .select("id, url")
     .eq("user_id", userId)
+    .neq("status", "failed")
     .in("url", results.map((r) => r.url));
   const byUrl = new Map((existing ?? []).map((e) => [e.url, e.id]));
   return results.map((r) =>

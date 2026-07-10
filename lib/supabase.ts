@@ -38,7 +38,8 @@ export type ReadingItem = {
   tags: string[] | null;
   created_at: string;
   // Phase 1
-  status: "queued" | "reading" | "read" | "archived";
+  status: "queued" | "reading" | "read" | "archived" | "failed";
+  failure_reason: "pdf" | "empty_extract" | "fetch_error" | null;
   user_tags: string[];
   notes: string | null;
   rating: number | null;

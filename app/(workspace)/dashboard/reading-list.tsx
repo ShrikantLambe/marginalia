@@ -7,10 +7,18 @@ import type { ReadingItem, ArticleHighlight, SearchResult, ReadingTheme, Project
 import { WelcomePanel } from "./welcome-panel";
 
 type Status = "queued" | "reading" | "read" | "archived";
-type Tab = "queued" | "reading" | "read" | "archived" | "all";
+type Tab = "queued" | "reading" | "read" | "archived" | "failed" | "all";
 
 const STATUS_CYCLE: Status[] = ["queued", "reading", "read", "archived"];
 const STATUS_LABELS: Record<Status, string> = { queued: "Queued", reading: "Reading", read: "Read", archived: "Archived" };
+
+const FAILURE_COPY: Record<string, string> = {
+  pdf: "Couldn't read this page — it's a PDF.",
+  empty_extract: "Couldn't extract readable text from this page.",
+  fetch_error: "Couldn't reach this page.",
+};
+
+export type RecentMargin = { id: string; text: string; item_id: string; title: string | null };
 
 function nextStatus(s: Status): Status {
   return STATUS_CYCLE[(STATUS_CYCLE.indexOf(s) + 1) % STATUS_CYCLE.length];
@@ -48,6 +56,35 @@ function StarRating({ value, onChange }: { value: number | null; onChange: (n: n
 
 // ── Dense list item ──────────────────────────────────────────────────────────
 
+// Compact, quieter card for failed extractions: URL + reason + Retry/Remove
+function FailedItem({
+  item, onRetry, onRemove,
+}: {
+  item: ReadingItem; onRetry: () => void; onRemove: () => void;
+}) {
+  const [retrying, setRetrying] = useState(false);
+  return (
+    <li className="px-4 py-3 border-b border-rule">
+      <p className="font-mono text-[11px] text-muted truncate mb-0.5">{item.url}</p>
+      <div className="flex items-center gap-4">
+        <span className="font-serif italic text-[13px] text-muted">
+          {FAILURE_COPY[item.failure_reason ?? ""] ?? "Couldn't read this page."}
+        </span>
+        <button
+          onClick={async () => { setRetrying(true); try { await onRetry(); } finally { setRetrying(false); } }}
+          disabled={retrying}
+          className="font-mono text-[10px] tracking-[0.12em] uppercase text-oxblood hover:text-ink transition-colors disabled:opacity-40"
+        >
+          {retrying ? "Retrying…" : "Retry"}
+        </button>
+        <button onClick={onRemove} className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted hover:text-oxblood transition-colors">
+          Remove
+        </button>
+      </div>
+    </li>
+  );
+}
+
 function ListItem({
   item, selected, selectMode, inSelectedSet,
   onSelect, onToggleSelect, onCycleStatus,
@@ -74,7 +111,7 @@ function ListItem({
         <span>{hostname(item.url)}</span>
         <span>·</span>
         <span>{formatDate(item.created_at)}</span>
-        {item.reading_time_minutes ? <><span>·</span><span>~{item.reading_time_minutes}m</span></> : null}
+        {item.reading_time_minutes ? <><span>·</span><span>{item.reading_time_minutes} min</span></> : null}
         <span>·</span>
         <button onClick={onCycleStatus}
           className={`px-1 py-px border text-[9px] transition-colors ${
@@ -116,11 +153,12 @@ function ListItem({
 // ── Right pane ───────────────────────────────────────────────────────────────
 
 function RightPane({
-  item, allItems, onUpdate, onRemove,
+  item, allItems, onUpdate, onRemove, userName, recentMargins,
 }: {
   item: ReadingItem | null; allItems: ReadingItem[];
   onUpdate: (id: string, updates: Partial<ReadingItem>) => Promise<void>;
   onRemove: (id: string) => void;
+  userName: string; recentMargins: RecentMargin[];
 }) {
   const [notesValue, setNotesValue] = useState(item?.notes ?? "");
   const [highlights, setHighlights] = useState<ArticleHighlight[]>([]);
@@ -140,9 +178,38 @@ function RightPane({
   }, [item?.id]);
 
   if (!item) {
+    // Pre-selection, this column is the living space: welcome panel + the
+    // reader's most recent margins, not just an instruction.
     return (
-      <div className="flex-1 flex items-center justify-center p-8">
-        <p className="font-serif italic text-[14px] text-muted text-center leading-relaxed">
+      <div className="flex-1 overflow-y-auto p-6 space-y-8">
+        <WelcomePanel userName={userName} />
+        {recentMargins.length > 0 && (
+          <div>
+            <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-muted mb-3">
+              Recent margins
+            </div>
+            <ul className="space-y-4">
+              {recentMargins.map((m) => (
+                <li key={m.id}>
+                  <Link href={`/items/${m.item_id}`} className="group/rm block">
+                    <div className="flex items-start gap-2">
+                      <div className="w-[2px] bg-oxblood/60 flex-shrink-0 self-stretch mt-0.5" />
+                      <div className="min-w-0">
+                        <p className="font-serif italic text-[13px] text-ink/80 leading-snug">
+                          {trunc(m.text, 140)}
+                        </p>
+                        <p className="font-mono text-[9px] tracking-[0.12em] uppercase text-muted mt-1 truncate group-hover/rm:text-oxblood transition-colors">
+                          {m.title ?? "Untitled"}
+                        </p>
+                      </div>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <p className="font-serif italic text-[13px] text-muted">
           Select an article to see its margins.
         </p>
       </div>
@@ -318,11 +385,18 @@ function RightPane({
 
 // ── Main component ───────────────────────────────────────────────────────────
 
+// URL-ish text captures; anything else is a concept search
+function looksLikeUrl(text: string): boolean {
+  if (/^https?:\/\//i.test(text)) return true;
+  return /^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(text);
+}
+
 export function ReadingList({
-  initialItems, initialThemes, userName, projectId, projects, projectName,
+  initialItems, initialThemes, userName, projectId, projects, projectName, recentMargins = [],
 }: {
   initialItems: ReadingItem[]; initialThemes: ReadingTheme[]; userName: string;
   projectId?: string; projects?: Project[]; projectName?: string;
+  recentMargins?: RecentMargin[];
 }) {
   const router = useRouter();
   const [items, setItems] = useState<ReadingItem[]>(initialItems);
@@ -388,12 +462,14 @@ export function ReadingList({
 
   const isSearching = searchQuery.trim().length > 0;
 
+  // Failed extractions live only under "Needs attention", never in the counts
   const counts = {
     queued:   items.filter(i => i.status === "queued").length,
     reading:  items.filter(i => i.status === "reading").length,
     read:     items.filter(i => i.status === "read").length,
     archived: items.filter(i => i.status === "archived").length,
-    all:      items.length,
+    failed:   items.filter(i => i.status === "failed").length,
+    all:      items.filter(i => i.status !== "failed").length,
   };
 
   // Total reading time for queued items
@@ -401,14 +477,14 @@ export function ReadingList({
     .filter(i => i.status === "queued" && i.reading_time_minutes)
     .reduce((acc, i) => acc + (i.reading_time_minutes ?? 0), 0);
   const queueTime = queuedMinutes >= 60
-    ? `~${Math.floor(queuedMinutes / 60)}h ${queuedMinutes % 60}m`
-    : `~${queuedMinutes}m`;
+    ? `${Math.floor(queuedMinutes / 60)} h ${queuedMinutes % 60} min`
+    : `${queuedMinutes} min`;
 
   const filteredItems = isSearching
     ? (searchResults ?? [])
     : items.filter(i => {
         const s = i.status ?? "queued";
-        const tabOk = tab === "all" ? true : s === tab;
+        const tabOk = tab === "all" ? s !== "failed" : s === tab;
         const tagsOk = tagFilters.every(t => i.tags?.includes(t));
         const themeOk = !themeFilter ? true : (themes.find(th => th.id === themeFilter)?.item_ids ?? []).includes(i.id);
         return tabOk && tagsOk && themeOk;
@@ -433,10 +509,18 @@ export function ReadingList({
     finally { setLoading(false); }
   }
 
+  // One smart bar: URLs capture, anything else searches by concept
+  function handleSmartChange(value: string) {
+    setUrl(value);
+    setSearchQuery(looksLikeUrl(value.trim()) ? "" : value);
+  }
+
   async function addItem(e: React.FormEvent) {
     e.preventDefault();
-    if (!url.trim()) return;
-    await saveUrl(url.trim());
+    const text = url.trim();
+    if (!text || !looksLikeUrl(text)) return; // non-URL text already live-searches
+    await saveUrl(/^https?:\/\//i.test(text) ? text : `https://${text}`);
+    setSearchQuery("");
   }
 
   function handleUrlPaste(e: React.ClipboardEvent<HTMLInputElement>) {
@@ -447,6 +531,17 @@ export function ReadingList({
       setUrl(pasted);
       saveUrl(pasted);
     } catch { /* not a URL — normal paste */ }
+  }
+
+  async function retryItem(id: string) {
+    const res = await fetch(`/api/items/${id}/retry-summary`, { method: "POST" });
+    if (res.ok) {
+      const repaired = await res.json();
+      setItems(prev => prev.map(i => i.id === id ? repaired : i));
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error ?? "Retry failed.");
+    }
   }
 
   async function removeItem(id: string) {
@@ -512,6 +607,16 @@ export function ReadingList({
     finally { setGeneratingThemes(false); }
   }
 
+  // Esc exits select-for-draft mode
+  useEffect(() => {
+    if (!selectMode) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") { setSelectMode(false); setSelectedIds(new Set()); }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [selectMode]);
+
   const TABS: { key: Tab; label: string }[] = [
     { key: "queued",   label: "Queued"   },
     { key: "reading",  label: "Reading"  },
@@ -525,7 +630,6 @@ export function ReadingList({
       <div className="flex flex-col flex-1 min-w-0 border-r border-rule overflow-hidden">
         {/* Top: wordmark + inputs */}
         <div className="flex-shrink-0 px-5 pt-5 pb-3 border-b border-rule">
-          <WelcomePanel userName={userName} />
           {/* Header row */}
           <div className="flex items-center justify-between mb-4">
             <h1 className="font-serif text-[22px] font-semibold leading-none tracking-tight truncate">
@@ -552,28 +656,22 @@ export function ReadingList({
               </a>
             </div>
           </div>
-          {/* URL input */}
-          <form onSubmit={addItem} className="flex items-center gap-2 mb-2">
-            <input type="url" value={url} onChange={e => setUrl(e.target.value)}
+          {/* Smart capture bar: URL → capture, anything else → concept search */}
+          <form onSubmit={addItem} className="relative flex items-center gap-2">
+            <input type="text" value={url} onChange={e => handleSmartChange(e.target.value)}
               onPaste={handleUrlPaste}
-              onKeyDown={e => { if (e.key === "Escape") { setUrl(""); setError(null); (e.target as HTMLInputElement).blur(); } }}
-              placeholder="https://…" required disabled={loading}
-              className="flex-1 bg-transparent border-b border-rule focus:border-oxblood outline-none px-1 py-2 font-serif italic text-[16px] placeholder:text-muted/60 transition-colors disabled:opacity-50 h-12" />
+              onKeyDown={e => { if (e.key === "Escape") { setUrl(""); setSearchQuery(""); setError(null); (e.target as HTMLInputElement).blur(); } }}
+              placeholder="Paste a URL to capture — or search by concept…" disabled={loading}
+              className="flex-1 bg-transparent border-b border-rule focus:border-oxblood outline-none px-1 py-2 font-serif italic text-[16px] placeholder:text-muted/60 transition-colors disabled:opacity-50 h-12 pr-6" />
             <span className="font-mono text-[10px] text-muted/50 flex-shrink-0">
-              {loading ? "…" : "↵"}
+              {loading || searching ? "…" : "↵"}
             </span>
-          </form>
-          {error && <p className="font-serif italic text-oxblood text-sm mb-1">{error}</p>}
-          {/* Search */}
-          <div className="relative">
-            <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search by concept…"
-              className="w-full bg-transparent border-b border-rule focus:border-oxblood outline-none px-1 py-1.5 font-serif text-[15px] placeholder:text-muted/50 transition-colors h-10 pr-6" />
-            {searching && <span className="absolute right-1 top-2 font-mono text-[10px] text-muted animate-pulse">…</span>}
-            {searchQuery && !searching && (
-              <button onClick={() => setSearchQuery("")} className="absolute right-1 top-2 font-mono text-[10px] text-muted hover:text-ink transition-colors">✕</button>
+            {url && !loading && !searching && (
+              <button type="button" onClick={() => { setUrl(""); setSearchQuery(""); }}
+                className="absolute right-6 font-mono text-[10px] text-muted hover:text-ink transition-colors">✕</button>
             )}
-          </div>
+          </form>
+          {error && <p className="font-serif italic text-oxblood text-sm mt-1">{error}</p>}
           {searchError && <p className="font-serif italic text-oxblood text-sm mt-1">{searchError}</p>}
         </div>
 
@@ -589,6 +687,14 @@ export function ReadingList({
                   {label} · {counts[key as keyof typeof counts]}
                 </button>
               ))}
+              {counts.failed > 0 && (
+                <button onClick={() => setTab("failed")}
+                  className={`font-mono text-[10px] tracking-[0.15em] uppercase py-3 pr-4 transition-colors ${
+                    tab === "failed" ? "text-oxblood border-b-2 border-oxblood" : "text-muted hover:text-oxblood border-b-2 border-transparent"
+                  }`}>
+                  Needs attention · {counts.failed}
+                </button>
+              )}
               <button onClick={() => setTab("all")}
                 className={`ml-auto font-mono text-[10px] tracking-[0.15em] uppercase py-3 transition-colors ${
                   tab === "all" ? "text-ink" : "text-muted hover:text-ink"
@@ -662,8 +768,10 @@ export function ReadingList({
               </select>
             )}
             <button onClick={() => { setSelectMode(v => !v); setSelectedIds(new Set()); }}
-              className={`font-mono text-[10px] tracking-[0.12em] uppercase transition-colors ${selectMode ? "text-oxblood" : "text-muted hover:text-ink"}`}>
-              {selectMode ? "✕ cancel" : "select for draft"}
+              className={`font-mono text-[10px] tracking-[0.12em] uppercase px-2 py-0.5 border transition-colors ${
+                selectMode ? "border-oxblood text-oxblood" : "border-rule text-muted hover:border-ink hover:text-ink"
+              }`}>
+              {selectMode ? `${selectedIds.size} selected · cancel` : "Select for draft"}
             </button>
           </div>
         </div>
@@ -677,6 +785,14 @@ export function ReadingList({
           ) : (
             <ul>
               {(filteredItems as Array<ReadingItem & { similarity?: number }>).map(item => (
+                item.status === "failed" ? (
+                  <FailedItem
+                    key={item.id}
+                    item={item}
+                    onRetry={() => retryItem(item.id)}
+                    onRemove={() => removeItem(item.id)}
+                  />
+                ) : (
                 <ListItem
                   key={item.id}
                   item={item}
@@ -687,6 +803,7 @@ export function ReadingList({
                   onToggleSelect={() => toggleSelect(item.id)}
                   onCycleStatus={e => { e.stopPropagation(); updateItem(item.id, { status: nextStatus((item.status ?? "queued") as Status) }); }}
                 />
+                )
               ))}
             </ul>
           )}
@@ -694,7 +811,7 @@ export function ReadingList({
 
         {/* Footer count */}
         <div className="flex-shrink-0 px-5 py-2 border-t border-rule font-mono text-[10px] tracking-[0.15em] uppercase text-muted">
-          {items.length} {items.length === 1 ? "entry" : "entries"}
+          {counts.all} {counts.all === 1 ? "entry" : "entries"}
         </div>
       </div>
 
@@ -705,6 +822,8 @@ export function ReadingList({
           allItems={items}
           onUpdate={updateItem}
           onRemove={removeItem}
+          userName={userName}
+          recentMargins={recentMargins}
         />
       </div>
 

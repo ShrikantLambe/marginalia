@@ -5,6 +5,29 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
+export type FailureReason = "pdf" | "empty_extract" | "fetch_error";
+
+/** Extraction failed in a known way — callers save a status='failed' row
+ *  instead of letting failure text masquerade as a summary. */
+export class ExtractionError extends Error {
+  reason: FailureReason;
+  constructor(reason: FailureReason, message: string) {
+    super(message);
+    this.reason = reason;
+  }
+}
+
+/** Human title fallback for failed captures: URL path, never a fake summary. */
+export function titleFromUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const lastSegment = u.pathname.split("/").filter(Boolean).pop();
+    return lastSegment ? `${u.hostname.replace(/^www\./, "")}/${lastSegment}` : u.hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
 export type Summary = {
   title: string;
   summary: string;
@@ -136,17 +159,30 @@ export async function fetchAndSummarize(url: string): Promise<Summary> {
     },
     signal: AbortSignal.timeout(15_000),
     redirect: "follow",
+  }).catch(() => {
+    throw new ExtractionError("fetch_error", "Couldn't reach this page.");
   });
   if (!res.ok) {
     if (res.status === 403 || res.status === 401) {
-      throw new Error(
+      throw new ExtractionError(
+        "fetch_error",
         "This page is behind a paywall or is blocking automated access. Try a non-paywalled URL or a cached version (e.g. archive.ph)."
       );
     }
-    if (res.status === 404) throw new Error("Page not found (404).");
-    if (res.status === 429) throw new Error("The site is rate-limiting requests. Try again in a moment.");
-    if (res.status >= 500) throw new Error(`The site returned a server error (${res.status}). Try again later.`);
-    throw new Error(`Could not fetch the page (HTTP ${res.status}).`);
+    if (res.status === 404) throw new ExtractionError("fetch_error", "Page not found (404).");
+    if (res.status === 429) throw new ExtractionError("fetch_error", "The site is rate-limiting requests. Try again in a moment.");
+    if (res.status >= 500) throw new ExtractionError("fetch_error", `The site returned a server error (${res.status}). Try again later.`);
+    throw new ExtractionError("fetch_error", `Could not fetch the page (HTTP ${res.status}).`);
+  }
+
+  // Non-HTML content (PDFs and other binaries) can't go through Readability —
+  // fail explicitly rather than feeding garbage to Gemini.
+  const contentType = res.headers.get("content-type") ?? "";
+  if (contentType.includes("application/pdf") || url.toLowerCase().endsWith(".pdf")) {
+    throw new ExtractionError("pdf", "This is a PDF — Marginalia can only read web pages.");
+  }
+  if (contentType && !contentType.includes("html") && !contentType.includes("xml") && !contentType.includes("text/plain")) {
+    throw new ExtractionError("empty_extract", `Can't read this content type (${contentType.split(";")[0]}).`);
   }
 
   const html = await res.text();
@@ -154,8 +190,8 @@ export async function fetchAndSummarize(url: string): Promise<Summary> {
   // 2. Extract article body with Readability
   const dom = new JSDOM(html, { url });
   const article = new Readability(dom.window.document).parse();
-  if (!article || !article.textContent) {
-    throw new Error("Could not extract readable content from this page");
+  if (!article || !article.textContent || article.textContent.replace(/\s+/g, " ").trim().length < 200) {
+    throw new ExtractionError("empty_extract", "Could not extract readable content from this page");
   }
 
   const title = article.title?.trim() || new URL(url).hostname;

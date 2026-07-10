@@ -17,6 +17,7 @@ export async function GET(_req: Request) {
       .from("reading_list")
       .select("id, title, status, scroll_progress, last_opened_at")
       .eq("user_id", user.id)
+      .neq("status", "failed")
       .not("last_opened_at", "is", null)
       .gte("last_opened_at", fourteenDaysAgo)
       .order("last_opened_at", { ascending: false })
