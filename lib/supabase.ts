@@ -59,6 +59,8 @@ export type ReadingItem = {
   hero_image_url: string | null;
   word_count: number | null;
   reading_time_minutes: number | null;
+  // Welcome Back
+  scroll_progress: number;
 };
 
 export type SearchResult = ReadingItem & { similarity: number };
@@ -143,3 +145,51 @@ export type BriefItem = {
 };
 
 export type BriefItemWithArticle = BriefItem & { reading_list: ReadingItem };
+
+export type Source = {
+  id: string;
+  user_id: string;
+  type: "domain" | "author";
+  value: string;
+  home_domains: string[] | null;
+  brief_id: string | null;
+  notes: string | null;
+  created_at: string;
+};
+
+export type DiscoverSearch = {
+  id: string;
+  user_id: string;
+  query: string;
+  scope: DiscoverScope;
+  cache_key: string | null;
+  result_count: number;
+  dropped_count: number;
+  created_at: string;
+};
+
+export type DiscoverSavedSearch = {
+  id: string;
+  user_id: string;
+  name: string;
+  query: string;
+  scope: DiscoverScope;
+  created_at: string;
+};
+
+export type DiscoverScope = {
+  mode: "all" | "brief" | "custom";
+  briefId?: string;
+  sourceIds?: string[];
+};
+
+export type DiscoverResult = {
+  url: string;
+  title: string;
+  snippet: string;
+  publishedDate?: string;
+  alreadyCaptured?: boolean;
+  itemId?: string;
+  authorVerification?: "verified" | "unverified" | "unknown";
+  matchedAuthor?: string;
+};

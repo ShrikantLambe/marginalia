@@ -215,6 +215,64 @@ export function ReaderView({
     }
   }
 
+  // ── Reading progress beacons ────────────────────────────────────────────────
+  // Extends the existing open beacon: last_opened_at on mount, then
+  // scroll_progress at 25/50/75/100% thresholds (fire-and-forget — progress
+  // tracking must never block or error the reading experience).
+
+  const sentThresholds = useRef(new Set<number>());
+
+  useEffect(() => {
+    fetch(`/api/items/${item.id}/open`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    }).catch(() => {});
+  }, [item.id]);
+
+  useEffect(() => {
+    if (!item.article_html) return;
+    let ticking = false;
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+        if (docHeight <= 0) return;
+        const pct = (window.scrollY / docHeight) * 100;
+        for (const threshold of [25, 50, 75, 100]) {
+          if (pct >= threshold && !sentThresholds.current.has(threshold)) {
+            sentThresholds.current.add(threshold);
+            fetch(`/api/items/${item.id}/open`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ progress: threshold }),
+            }).catch(() => {});
+          }
+        }
+      });
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [item.article_html, item.id]);
+
+  // Restore approximate position when resuming a half-read article
+  useEffect(() => {
+    if (!item.article_html) return;
+    const progress = item.scroll_progress ?? 0;
+    if (progress >= 25 && progress <= 99) {
+      const timer = setTimeout(() => {
+        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+        if (docHeight > 0) window.scrollTo({ top: (progress / 100) * docHeight });
+        // Don't re-fire beacons for ground already covered
+        for (const t of [25, 50, 75]) if (progress >= t) sentThresholds.current.add(t);
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Reading-behavior insight ────────────────────────────────────────────────
   // Fires at most once per page view: reader has stopped scrolling for a while
   // mid-article (not just landed, not already at the end).

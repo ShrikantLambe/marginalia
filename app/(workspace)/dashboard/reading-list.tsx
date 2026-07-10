@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ReadingItem, ArticleHighlight, SearchResult, ReadingTheme, Project } from "@/lib/supabase";
+import { WelcomePanel } from "./welcome-panel";
 
 type Status = "queued" | "reading" | "read" | "archived";
 type Tab = "queued" | "reading" | "read" | "archived" | "all";
@@ -524,6 +525,7 @@ export function ReadingList({
       <div className="flex flex-col flex-1 min-w-0 border-r border-rule overflow-hidden">
         {/* Top: wordmark + inputs */}
         <div className="flex-shrink-0 px-5 pt-5 pb-3 border-b border-rule">
+          <WelcomePanel userName={userName} />
           {/* Header row */}
           <div className="flex items-center justify-between mb-4">
             <h1 className="font-serif text-[22px] font-semibold leading-none tracking-tight truncate">

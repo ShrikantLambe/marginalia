@@ -9,9 +9,10 @@ npm run dev       # start Next.js dev server on http://localhost:3000
 npm run build     # production build
 npm run lint      # ESLint via next lint
 npm run start     # serve the production build
+npm test          # vitest — pure lib utilities only (lib/__tests__/)
 ```
 
-No test suite exists.
+Tests cover only pure `lib/` utilities (domains, discover enforcement, bylines, welcome resolver). No app/component tests exist.
 
 ## Environment setup
 
@@ -25,6 +26,8 @@ Copy `.env.example` to `.env.local` and fill in all variables:
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Project Settings → API |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API (service_role secret, not anon) |
 | `GEMINI_API_KEY` | https://aistudio.google.com/apikey |
+| `TAVILY_API_KEY` | https://tavily.com — powers Discover web search; empty = mock provider |
+| `SEARCH_PROVIDER` | optional; set to `mock` to force the mock search provider |
 
 Add `http://localhost:3000` under **Domains & Handlers** in Stack Auth dashboard for local dev.
 
@@ -51,6 +54,12 @@ POST /api/items
 - `briefs/` — question-driven collections list (client component); `briefs/[id]/` — brief detail + candidate items
 - `search/` — semantic search (client component, debounced 300ms)
 - `index/` — tag-indexed article list (Server Component, A–Z grouped)
+- `discover/` — guardrailed web search through user-trusted sources; captures via POST /api/items
+- `sources/` — the Discover allowlist: trusted domains + authors, brief pins, library suggestions, guardrail log
+
+**In-reader AI chat:** `items/[id]/chat-panel.tsx` — floating panel with general Q&A + passage threads (scoped by highlight id) + proactive scroll-stall insights. All turns persist to `chat_messages`.
+
+**Welcome Back:** `dashboard/welcome-panel.tsx` greets from the browser clock and shows max 3 resume cards computed by `/api/welcome-state` from existing columns (`scroll_progress`, `last_opened_at`, syntheses, discover_searches). Shows only after a 4+ hour gap; dismissal is sessionStorage-only.
 
 ## API Routes
 
@@ -78,6 +87,15 @@ POST /api/items
 | `/api/synthesize/[id]/stream` | GET | Stream Gemini draft, save to DB on completion |
 | `/api/synthesize/[id]` | PATCH | Update draft/title |
 | `/api/syntheses` | GET | List past syntheses |
+| `/api/items/[id]/chat` | GET | Chat history for an item (all threads; client groups by highlight_id) |
+| `/api/items/[id]/chat/stream` | POST | Streaming Q&A grounded in article_text (plain-text stream) |
+| `/api/items/[id]/insight` | POST | Proactive reading insight (dwell/scroll-stall triggered) |
+| `/api/sources` | GET, POST | List sources + library suggestions + guardrail log; add a source |
+| `/api/sources/[id]` | PATCH, DELETE | Update brief pin / home domains; delete |
+| `/api/discover` | GET, POST | GET: recent + saved searches. POST: guardrailed web search (allowlist-enforced, cached 24h) |
+| `/api/discover/saved` | POST | Save a search (cap 20/user) |
+| `/api/discover/saved/[id]` | PATCH, DELETE | Rename / delete a saved search |
+| `/api/welcome-state` | GET | Deterministic resume suggestions (reading/draft/search/unread) |
 | `/api/cron/cluster` | GET | Daily cron: cluster all users (requires CRON_SECRET header) |
 | `/api/debug` | GET | Health check: embed test, item counts, RPC test |
 | `/api/debug/clustering` | GET | Show pairwise similarity stats + cluster counts at various epsilons |
@@ -92,6 +110,12 @@ POST /api/items
 - [lib/brief-routing.ts](lib/brief-routing.ts) — `autoRouteToBriefs()` (called after embedding a new item), `autoMatchItemsToBrief()` (called after creating a brief); cosine similarity threshold 0.55; never throws
 - [lib/usage-log.ts](lib/usage-log.ts) — `checkAndLog()` (atomic check+insert via Postgres RPC); 150 ops/day limit
 - [lib/rate-limit.ts](lib/rate-limit.ts) — in-process soft rate limiter (per-user per-endpoint)
+- [lib/chat.ts](lib/chat.ts) — in-reader chat: `buildChatPrompt()`, `streamChatAnswer()`, `generateInsight()`
+- [lib/domains.ts](lib/domains.ts) — `normalizeDomain()`: URL/domain → eTLD+1 via tldts (never hand-rolled)
+- [lib/search-provider.ts](lib/search-provider.ts) — Tavily adapter + mock (mock includes a rogue-domain fixture for enforcement tests)
+- [lib/discover.ts](lib/discover.ts) — `enforceAllowlist()` (THE guardrail — server-side re-parse of every result URL), `buildCacheKey()`
+- [lib/bylines.ts](lib/bylines.ts) — `extractByline()` (JSON-LD → meta → selectors), `matchAuthor()` token-set fuzzy match
+- [lib/welcome.ts](lib/welcome.ts) — `computeWelcomeState()`: deterministic resume suggestions, pure function
 
 ## Database
 
@@ -112,6 +136,10 @@ POST /api/items
 | 011 | Phase 7: article_html/text, author, site_name, hero_image_url, word_count, reading_time_minutes on reading_list; new `highlights` table; migrates old jsonb highlights |
 | 012 | Phase 5: `briefs` and `brief_items` tables |
 | 013 | Fix match_reading_list RPC: drops highlights column reference, adds Phase 7 metadata fields |
+| 014 | Phase 1.2: item status refinements, projects + project_items tables |
+| 015 | chat_messages table (in-reader Q&A, passage threads, proactive insights) |
+| 016 | Discover: sources, guardrail violations, query cache, search log, saved searches |
+| 017 | scroll_progress column on reading_list (Welcome Back reading progress) |
 
 **Supabase client** uses `service_role` key server-side only — bypasses RLS. All tables have RLS explicitly disabled. Never send `SUPABASE_SERVICE_ROLE_KEY` to the client.
 

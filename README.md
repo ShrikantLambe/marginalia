@@ -119,3 +119,19 @@ That's it.
 | Gemini API | Generous, but rate-limited               | 429 errors during bursts                     |
 
 For a personal reading list, you will not hit any of these.
+
+---
+
+## Discover — web search through your sources
+
+Discover searches the open web, but **only** the sites and writers you've added at `/sources`. Enforcement has three layers:
+
+1. Your allowlist is sent to the search provider (Tavily) as `include_domains` — a hint.
+2. **Server-side enforcement** — every returned URL is re-parsed to its registrable domain (via the public-suffix list) and dropped if it isn't in your allowlist. Dropped results are logged to a guardrail log visible at the bottom of `/sources`. This layer is the actual guardrail; the provider is never trusted.
+3. Author-scoped results get byline verification: pages are fetched, bylines extracted (JSON-LD → meta tags → common selectors), and fuzzy-matched against your author list. Verified results badge ✓ and sort first.
+
+Setup: get a free key at https://tavily.com and set `TAVILY_API_KEY`. Without a key the app uses a built-in mock provider (fine for development). Queries are cached for 24h per (allowlist, query) — cached repeats don't hit the provider or your daily AI budget. Capturing a result goes through the same `POST /api/items` pipeline as pasting a URL: Readability, TL;DR, tags, embedding, brief auto-routing.
+
+## Welcome Back
+
+Returning to the dashboard after a 4+ hour gap greets you by your browser's local time and offers up to three resume cards: a half-read article (reading progress is tracked at 25/50/75/100% scroll via the open beacon; finishing marks it read), your latest draft, your last Discover search (suppressed once you've captured from it), or the unread pile if it's grown past five. Everything is computed deterministically from existing columns — no LLM, no event system, no tracking beyond what the app already stored.
