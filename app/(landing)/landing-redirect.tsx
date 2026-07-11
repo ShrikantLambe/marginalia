@@ -9,7 +9,7 @@ export function LandingRedirect() {
   const router = useRouter();
 
   useEffect(() => {
-    if (user) router.replace("/dashboard");
+    if (user) router.replace("/home");
   }, [user, router]);
 
   return null;

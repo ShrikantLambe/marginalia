@@ -132,6 +132,10 @@ Discover searches the open web, but **only** the sites and writers you've added 
 
 Setup: get a free key at https://tavily.com and set `TAVILY_API_KEY`. Without a key the app uses a built-in mock provider (fine for development). Queries are cached for 24h per (allowlist, query) — cached repeats don't hit the provider or your daily AI budget. Capturing a result goes through the same `POST /api/items` pipeline as pasting a URL: Readability, TL;DR, tags, embedding, brief auto-routing.
 
+## The front page
+
+Signing in lands on `/home` — a newspaper front page: masthead with dateline and edition (from your browser clock), a greeting headline, one omnibox (paste a URL to capture in place, or search your library or Discover), and the lede: your most recent half-read article with how many minutes are left. When nothing's half-read, the page composes one quiet sentence about your actual state instead. Nothing is fabricated, nothing needs dismissing.
+
 ## Welcome Back
 
 Returning to the dashboard after a 4+ hour gap greets you by your browser's local time and offers up to three resume cards: a half-read article (reading progress is tracked at 25/50/75/100% scroll via the open beacon; finishing marks it read), your latest draft, your last Discover search (suppressed once you've captured from it), or the unread pile if it's grown past five. Everything is computed deterministically from existing columns — no LLM, no event system, no tracking beyond what the app already stored.

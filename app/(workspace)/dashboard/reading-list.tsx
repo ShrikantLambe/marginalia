@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ReadingItem, ArticleHighlight, SearchResult, ReadingTheme, Project } from "@/lib/supabase";
-import { WelcomePanel } from "./welcome-panel";
 
 type Status = "queued" | "reading" | "read" | "archived";
 type Tab = "queued" | "reading" | "read" | "archived" | "failed" | "all";
@@ -153,12 +152,12 @@ function ListItem({
 // ── Right pane ───────────────────────────────────────────────────────────────
 
 function RightPane({
-  item, allItems, onUpdate, onRemove, userName, recentMargins,
+  item, allItems, onUpdate, onRemove, recentMargins,
 }: {
   item: ReadingItem | null; allItems: ReadingItem[];
   onUpdate: (id: string, updates: Partial<ReadingItem>) => Promise<void>;
   onRemove: (id: string) => void;
-  userName: string; recentMargins: RecentMargin[];
+  recentMargins: RecentMargin[];
 }) {
   const [notesValue, setNotesValue] = useState(item?.notes ?? "");
   const [highlights, setHighlights] = useState<ArticleHighlight[]>([]);
@@ -178,11 +177,10 @@ function RightPane({
   }, [item?.id]);
 
   if (!item) {
-    // Pre-selection, this column is the living space: welcome panel + the
-    // reader's most recent margins, not just an instruction.
+    // Pre-selection, this column shows the reader's most recent margins —
+    // the greeting now lives on the front page (/home).
     return (
       <div className="flex-1 overflow-y-auto p-6 space-y-8">
-        <WelcomePanel userName={userName} />
         {recentMargins.length > 0 && (
           <div>
             <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-muted mb-3">
@@ -822,7 +820,6 @@ export function ReadingList({
           allItems={items}
           onUpdate={updateItem}
           onRemove={removeItem}
-          userName={userName}
           recentMargins={recentMargins}
         />
       </div>

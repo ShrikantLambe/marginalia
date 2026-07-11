@@ -46,7 +46,7 @@ export function LeftRail() {
 
         {/* Wordmark + quick-add */}
         <div className="flex items-center justify-between px-4 h-14 flex-shrink-0">
-          <Link href="/dashboard" className="font-serif text-base font-semibold">
+          <Link href="/home" className="font-serif text-base font-semibold">
             Marg<span className="text-oxblood">i</span>nalia
           </Link>
           <button

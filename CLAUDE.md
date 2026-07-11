@@ -49,6 +49,7 @@ POST /api/items
 **Workspace layout:** All authenticated pages live under `app/(workspace)/` and share a left rail navigation ([app/(workspace)/layout.tsx](app/(workspace)/layout.tsx) + `app/components/LeftRail.tsx`). The rail is 60px wide on desktop; on mobile a bottom tab bar replaces it.
 
 **Pages in `app/(workspace)/`:**
+- `home/` — the front page (post-login landing): newspaper masthead + dateline/edition from the browser clock, greeting headline, one omnibox (URL → capture inline; text → routes to /search or /discover), then the lede (most recent half-read article with minutes-left) or a composed quiet sentence. Deliberately does NOT use PageHeader.
 - `dashboard/` — reading list; `page.tsx` is a Server Component (auth + fetch), `reading-list.tsx` is `"use client"` (all interactive state). One smart capture bar (URL → capture, text → concept search); welcome panel + recent margins live in the right column pre-selection. Failed extractions render under a "Needs attention" tab.
 - `items/[id]/` — reader view; `page.tsx` fetches item + highlights server-side, `reader-view.tsx` is `"use client"`
 - `briefs/` — question-driven collections list (client component); `briefs/[id]/` — brief detail + candidate items
@@ -59,7 +60,7 @@ POST /api/items
 
 **In-reader AI chat:** `items/[id]/chat-panel.tsx` — floating panel with general Q&A + passage threads (scoped by highlight id) + proactive scroll-stall insights. All turns persist to `chat_messages`.
 
-**Welcome Back:** `dashboard/welcome-panel.tsx` greets from the browser clock and shows max 3 resume cards computed by `/api/welcome-state` from existing columns (`scroll_progress`, `last_opened_at`, syntheses, discover_searches). Shows only after a 4+ hour gap; dismissal is sessionStorage-only.
+**The Morning Paper:** `/home` supersedes the old Welcome Back panel — home *is* the welcome now (no dismissal, no gap gating). Resolver in [lib/home.ts](lib/home.ts) (`computeHomeState()`, pure + unit-tested); greeting/edition recompute on tab refocus after 30+ min. Post-login lands here (`stack.ts` afterSignIn); the rail wordmark links here; Inbox stays at /dashboard.
 
 ## API Routes
 
@@ -95,7 +96,7 @@ POST /api/items
 | `/api/discover` | GET, POST | GET: recent + saved searches. POST: guardrailed web search (allowlist-enforced, cached 24h) |
 | `/api/discover/saved` | POST | Save a search (cap 20/user) |
 | `/api/discover/saved/[id]` | PATCH, DELETE | Rename / delete a saved search |
-| `/api/welcome-state` | GET | Deterministic resume suggestions (reading/draft/search/unread) |
+| `/api/home-state` | GET | Front-page state: lede (resume item), standfirst (draft/queue), quiet sentence |
 | `/api/cron/cluster` | GET | Daily cron: cluster all users (requires CRON_SECRET header) |
 | `/api/debug` | GET | Health check: embed test, item counts, RPC test |
 | `/api/debug/clustering` | GET | Show pairwise similarity stats + cluster counts at various epsilons |
