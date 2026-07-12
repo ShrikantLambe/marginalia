@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@stackframe/stack";
-import { Search, Archive, PenTool, Plus, Inbox, ChevronDown, ChevronRight, Compass, Globe, Bookmark } from "lucide-react";
+import { Search, Archive, PenTool, Plus, Inbox, ChevronDown, ChevronRight, Globe, Bookmark } from "lucide-react";
 import { QuickSaveModal } from "@/app/components/QuickSaveModal";
 import type { Brief } from "@/lib/supabase";
 
@@ -26,11 +26,10 @@ export function LeftRail() {
   const isInbox = pathname === "/dashboard";
 
   const LIBRARY = [
-    { href: "/search",    icon: Search,   label: "Search"   },
-    { href: "/discover",  icon: Compass,  label: "Discover" },
-    { href: "/sources",   icon: Globe,    label: "Sources"  },
-    { href: "/tags",      icon: Archive,  label: "Index"    },
-    { href: "/synthesis", icon: PenTool,  label: "Drafts"   },
+    { href: "/find",      icon: Search,   label: "Find"    },
+    { href: "/sources",   icon: Globe,    label: "Sources" },
+    { href: "/tags",      icon: Archive,  label: "Index"   },
+    { href: "/synthesis", icon: PenTool,  label: "Drafts"  },
   ];
 
   function isLibraryActive(href: string) {
@@ -164,13 +163,9 @@ export function LeftRail() {
           <Inbox size={20} strokeWidth={2} className={isInbox ? "text-oxblood" : "text-muted"} />
           <span className={`font-mono text-[8px] tracking-[0.12em] uppercase ${isInbox ? "text-oxblood" : "text-muted"}`}>Inbox</span>
         </Link>
-        <Link href="/search" className="flex flex-col items-center gap-0.5 px-3">
-          <Search size={20} strokeWidth={2} className={pathname === "/search" ? "text-oxblood" : "text-muted"} />
-          <span className={`font-mono text-[8px] tracking-[0.12em] uppercase ${pathname === "/search" ? "text-oxblood" : "text-muted"}`}>Search</span>
-        </Link>
-        <Link href="/discover" className="flex flex-col items-center gap-0.5 px-3">
-          <Compass size={20} strokeWidth={2} className={pathname.startsWith("/discover") ? "text-oxblood" : "text-muted"} />
-          <span className={`font-mono text-[8px] tracking-[0.12em] uppercase ${pathname.startsWith("/discover") ? "text-oxblood" : "text-muted"}`}>Discover</span>
+        <Link href="/find" className="flex flex-col items-center gap-0.5 px-3">
+          <Search size={20} strokeWidth={2} className={pathname.startsWith("/find") ? "text-oxblood" : "text-muted"} />
+          <span className={`font-mono text-[8px] tracking-[0.12em] uppercase ${pathname.startsWith("/find") ? "text-oxblood" : "text-muted"}`}>Find</span>
         </Link>
         <Link href="/briefs" className="flex flex-col items-center gap-0.5 px-3">
           <Bookmark size={20} strokeWidth={2} className={pathname.startsWith("/briefs") ? "text-oxblood" : "text-muted"} />

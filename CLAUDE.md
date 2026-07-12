@@ -49,13 +49,12 @@ POST /api/items
 **Workspace layout:** All authenticated pages live under `app/(workspace)/` and share a left rail navigation ([app/(workspace)/layout.tsx](app/(workspace)/layout.tsx) + `app/components/LeftRail.tsx`). The rail is 60px wide on desktop; on mobile a bottom tab bar replaces it.
 
 **Pages in `app/(workspace)/`:**
-- `home/` — the front page (post-login landing): newspaper masthead + dateline/edition from the browser clock, greeting headline, one omnibox (URL → capture inline; text → routes to /search or /discover), then the lede (most recent half-read article with minutes-left) or a composed quiet sentence. Deliberately does NOT use PageHeader.
+- `home/` — the front page (post-login landing): newspaper masthead + dateline/edition from the browser clock, greeting headline, one omnibox (URL → capture inline; text → routes to /find, Library or Web), then the lede (most recent half-read article with minutes-left) or a composed quiet sentence. Deliberately does NOT use PageHeader.
 - `dashboard/` — reading list; `page.tsx` is a Server Component (auth + fetch), `reading-list.tsx` is `"use client"` (all interactive state). One smart capture bar (URL → capture, text → concept search); welcome panel + recent margins live in the right column pre-selection. Failed extractions render under a "Needs attention" tab.
 - `items/[id]/` — reader view; `page.tsx` fetches item + highlights server-side, `reader-view.tsx` is `"use client"`
 - `briefs/` — question-driven collections list (client component); `briefs/[id]/` — brief detail + candidate items
-- `search/` — semantic search (client component, debounced 300ms)
+- `find/` — unified search surface: one input + a Library/Web toggle. Library mode = debounced semantic search of saved items (`/api/search`); Web mode = guardrailed Discover through trusted sources with capture (`/api/discover`). `find-view.tsx` shell owns the input/toggle; `library-results.tsx` and `discover-panel.tsx` are the two engines. `/search` and `/discover` are thin redirects into `/find`.
 - `tags/` — tag-indexed article list (Server Component, A–Z grouped; rail label "Index"). Was `index/` — renamed because a static root page prerenders to `index.html`, which shadows a dynamic `/index` route on Vercel.
-- `discover/` — guardrailed web search through user-trusted sources; captures via POST /api/items
 - `sources/` — the Discover allowlist: trusted domains + authors, brief pins, library suggestions, guardrail log
 
 **In-reader AI chat:** `items/[id]/chat-panel.tsx` — floating panel with general Q&A + passage threads (scoped by highlight id) + proactive scroll-stall insights. All turns persist to `chat_messages`.
@@ -85,7 +84,7 @@ POST /api/items
 | `/api/themes` | GET, POST | Get themes; POST triggers re-clustering (rate-limited 1/hr) |
 | `/api/themes/[id]` | PATCH | Rename a theme (sets user_renamed=true) |
 | `/api/synthesize` | POST | Create synthesis row, return id |
-| `/api/synthesize/[id]/stream` | GET | Stream Gemini draft, save to DB on completion |
+| `/api/synthesize/[id]/stream` | POST | Stream Gemini draft, save to DB on completion (POST: it mutates + spends quota) |
 | `/api/synthesize/[id]` | PATCH | Update draft/title |
 | `/api/syntheses` | GET | List past syntheses |
 | `/api/items/[id]/chat` | GET | Chat history for an item (all threads; client groups by highlight_id) |

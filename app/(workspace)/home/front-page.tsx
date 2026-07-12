@@ -129,9 +129,13 @@ export function FrontPage({ firstName }: { firstName: string | null }) {
       return;
     }
 
-    // The front page is the door — the rooms show results
+    // The front page is the door — Find shows results
     const q = encodeURIComponent(text);
-    router.push(searchTarget === "discover" ? `/discover?q=${q}&run=1` : `/search?q=${q}`);
+    router.push(
+      searchTarget === "discover"
+        ? `/find?mode=web&q=${q}&run=1`
+        : `/find?mode=library&q=${q}`
+    );
   }
 
   const dateline = clock
@@ -321,7 +325,7 @@ function QuietSentence({ sentence, draftId }: { sentence: string; draftId: strin
     const idx = rest.indexOf(phrase);
     parts.push(rest.slice(0, idx));
     parts.push(
-      <Link key="sources" href="/discover" className="text-oxblood link-underline">{phrase}</Link>
+      <Link key="sources" href="/find?mode=web" className="text-oxblood link-underline">{phrase}</Link>
     );
     rest = rest.slice(idx + phrase.length);
   }

@@ -1,15 +1,12 @@
-import { stackServerApp } from "@/stack";
 import { redirect } from "next/navigation";
-import { topTags } from "@/lib/tags";
-import { SearchView } from "./search-view";
 
-export const dynamic = "force-dynamic";
-
-export default async function SearchPage() {
-  const user = await stackServerApp.getUser();
-  if (!user) redirect("/handler/sign-in");
-
-  const recentConcepts = await topTags(user.id, 8);
-
-  return <SearchView recentConcepts={recentConcepts} />;
+// /search merged into the unified /find page (Library mode).
+export default async function SearchRedirect({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string>>;
+}) {
+  const params = await searchParams;
+  const q = params.q ? `&q=${encodeURIComponent(params.q)}` : "";
+  redirect(`/find?mode=library${q}`);
 }
