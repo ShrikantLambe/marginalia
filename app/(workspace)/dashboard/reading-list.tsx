@@ -634,7 +634,7 @@ export function ReadingList({
               {projectName ? projectName : <span>Inbox</span>}
             </h1>
             <div className="flex items-center gap-3 font-mono text-[10px] tracking-[0.12em] uppercase text-muted">
-              <a href="/synthesis" className="hover:text-ink transition-colors">Drafts</a>
+              <Link href="/synthesis" className="hover:text-ink transition-colors">Drafts</Link>
               <button onClick={generateThemes} disabled={generatingThemes}
                 className="hover:text-ink transition-colors disabled:opacity-40">
                 {generatingThemes ? "…" : "Themes"}

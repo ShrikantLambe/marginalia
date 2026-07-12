@@ -3,7 +3,7 @@ import { stackServerApp } from "@/stack";
 import { supabase } from "@/lib/supabase";
 import { fetchAndSummarize, ExtractionError, titleFromUrl } from "@/lib/summarize";
 import { embed, buildEmbeddingText, EMBEDDING_MODEL } from "@/lib/embeddings";
-import { checkAndLog, logUsage } from "@/lib/usage-log";
+import { checkAndLog, logUsage, DAILY_LIMIT } from "@/lib/usage-log";
 import { generateEditorialNote } from "@/lib/editorial";
 import { rateLimit } from "@/lib/rate-limit";
 import { autoRouteToBriefs } from "@/lib/brief-routing";
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     const allowed = await checkAndLog(user.id, "summarize");
     if (!allowed) {
       return NextResponse.json(
-        { error: "You've reached your daily limit of 150 AI operations. Try again tomorrow." },
+        { error: `You've reached your daily limit of ${DAILY_LIMIT} AI operations. Try again tomorrow.` },
         { status: 429 }
       );
     }

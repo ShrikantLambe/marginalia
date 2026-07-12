@@ -2,11 +2,16 @@ import "server-only";
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Must be a Supabase *secret* key (sb_secret_… or the legacy service_role JWT).
+// It bypasses RLS — never a publishable/anon key, which RLS silently reduces to
+// zero rows. SUPABASE_SECRET_KEY is preferred; SUPABASE_SERVICE_ROLE_KEY is the
+// legacy name, still accepted so existing deploys don't break.
+const SUPABASE_KEY =
+  process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   throw new Error(
-    "Missing required env vars: NEXT_PUBLIC_SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY"
+    "Missing required env vars: NEXT_PUBLIC_SUPABASE_URL and/or SUPABASE_SECRET_KEY"
   );
 }
 

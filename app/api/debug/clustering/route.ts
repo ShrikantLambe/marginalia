@@ -19,6 +19,9 @@ function cosineDistance(a: number[], b: number[]): number {
 export async function GET() {
   const user = await stackServerApp.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (process.env.ENABLE_DEBUG_ENDPOINT !== "1") {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   const { data: items } = await supabase
     .from("reading_list")

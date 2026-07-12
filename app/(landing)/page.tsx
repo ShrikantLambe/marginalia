@@ -14,7 +14,7 @@ export default function Home() {
           Margin<span className="text-oxblood">a</span>lia
         </h1>
         <p className="mt-6 font-serif text-xl md:text-2xl text-ink/80 italic max-w-xl">
-          A quiet reading list. Paste a link, get a TL;DR — keep what's worth
+          A quiet reading list. Paste a link, get a TL;DR — keep what&apos;s worth
           coming back to.
         </p>
       </header>

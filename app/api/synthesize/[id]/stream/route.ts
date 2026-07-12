@@ -67,7 +67,9 @@ function extractTitle(draft: string): string {
   return first.replace(/^#+\s*/, "").slice(0, 120);
 }
 
-export async function GET(
+// POST, not GET: this generates a draft (spends Gemini quota) and writes to the
+// DB. A GET would be prefetched/crawled and silently burn budget.
+export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {

@@ -1,6 +1,7 @@
 /**
  * Byline extraction + fuzzy author matching for author-scoped Discover results.
  */
+import { safeFetch } from "./safe-fetch";
 
 function stripDiacritics(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -67,17 +68,17 @@ export function extractBylineFromHtml(html: string): string | null {
   return null;
 }
 
-/** Fetch a result page and extract its byline. 8s timeout, one retry. */
+/** Fetch a result page and extract its byline. 8s timeout, one retry.
+ *  SSRF-guarded — Discover results are external URLs, never trusted. */
 export async function extractByline(url: string): Promise<string | null> {
   const attempt = async () => {
-    const res = await fetch(url, {
+    const res = await safeFetch(url, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         Accept: "text/html,application/xhtml+xml",
       },
       signal: AbortSignal.timeout(8_000),
-      redirect: "follow",
     });
     if (!res.ok) return null;
     const html = await res.text();

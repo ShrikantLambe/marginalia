@@ -14,10 +14,16 @@ alter table reading_list
 -- 3. Data fix: rows where an extraction-failure message was stored as the
 --    summary. Flip them to failed, clear the corrupt tags, and delete their
 --    embeddings so semantic search / themes / brief routing are clean again.
+--
+--    IMPORTANT: match ONLY on anchored failure phrasings that begin the
+--    summary — never a bare '%pdf%' / '%error%' substring, which would
+--    destroy a legitimate article *about* PDFs or errors. These are the exact
+--    phrases the pre-018 summarizer emitted when Gemini reported it could not
+--    parse the input.
 update reading_list
 set status = 'failed',
     failure_reason = case
-      when summary ilike '%pdf%' then 'pdf'
+      when summary ilike '%raw pdf%' or summary ilike '%pdf format%' then 'pdf'
       else 'empty_extract'
     end,
     summary = null,
@@ -29,15 +35,11 @@ set status = 'failed',
     editorial_references = '{}'
 where status != 'failed'
   and (
-    summary ilike '%unreadable content%'
-    or summary ilike '%cannot be summarized%'
-    or summary ilike '%unable to summarize%'
-    or summary ilike '%cannot access the content%'
+    summary ilike 'The provided article content is in a raw pdf%'
+    or summary ilike 'This content is unreadable%'
+    or summary ilike '%cannot be summarized as it contains no%'
     or summary ilike '%does not contain any article content%'
-    or exists (
-      select 1 from unnest(coalesce(tags, '{}')) t
-      where t ilike '%unreadable%' or t ilike '%error%'
-    )
+    or summary ilike '%cannot access the content of the provided url%'
   );
 
 -- 4. Past Drafts polish: no synthesis should render as "Untitled draft"

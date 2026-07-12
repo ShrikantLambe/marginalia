@@ -2,6 +2,8 @@ import "server-only";
 import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import DOMPurify from "isomorphic-dompurify";
+import { safeFetch, UnsafeUrlError } from "./safe-fetch";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
@@ -41,13 +43,20 @@ export type Summary = {
   readingTimeMinutes: number;
 };
 
-/** Strip dangerous tags as defense-in-depth (Readability already sanitizes, but belt-and-suspenders) */
+/**
+ * Sanitize extracted article HTML before it is stored and later injected via
+ * innerHTML in the reader. Uses DOMPurify (allowlist-based) — a regex blacklist
+ * cannot stop `onerror=`, `javascript:` URIs, or `<svg onload>`. This is the
+ * XSS boundary for saved pages, not defense-in-depth: never weaken it to a
+ * blacklist.
+ */
 function sanitizeHtml(html: string): string {
-  return html.replace(
-    /<(script|iframe|style|object|embed)(\s[^>]*)?>[\s\S]*?<\/\1>/gi, ""
-  ).replace(
-    /<(script|iframe|style|object|embed)(\s[^>]*)?\/?>/, ""
-  );
+  return DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true },
+    FORBID_TAGS: ["style", "form", "input", "button"],
+    FORBID_ATTR: ["style"],
+    ALLOW_DATA_ATTR: false,
+  });
 }
 
 function extractHeroImage(dom: JSDOM, baseUrl: string): string | null {
@@ -144,8 +153,8 @@ CHANNEL: ${author ?? "unknown"}`;
 export async function fetchAndSummarize(url: string): Promise<Summary> {
   const youtubeId = extractYouTubeId(url);
   if (youtubeId) return fetchAndSummarizeYouTube(url, youtubeId);
-  // 1. Fetch the page
-  const res = await fetch(url, {
+  // 1. Fetch the page — SSRF-guarded (rejects private/internal hosts, re-checks redirects)
+  const res = await safeFetch(url, {
     headers: {
       "User-Agent":
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -158,8 +167,8 @@ export async function fetchAndSummarize(url: string): Promise<Summary> {
       "Sec-Fetch-Site": "none",
     },
     signal: AbortSignal.timeout(15_000),
-    redirect: "follow",
-  }).catch(() => {
+  }).catch((e) => {
+    if (e instanceof UnsafeUrlError) throw new ExtractionError("fetch_error", e.message);
     throw new ExtractionError("fetch_error", "Couldn't reach this page.");
   });
   if (!res.ok) {

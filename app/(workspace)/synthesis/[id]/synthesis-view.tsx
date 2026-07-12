@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import Link from "next/link";
 import type { Synthesis } from "@/lib/supabase";
 
 export function SynthesisView({
@@ -29,7 +30,7 @@ export function SynthesisView({
     const controller = new AbortController();
     setStreaming(true);
 
-    fetch(`/api/synthesize/${synthesis.id}/stream`, { signal: controller.signal })
+    fetch(`/api/synthesize/${synthesis.id}/stream`, { method: "POST", signal: controller.signal })
       .then(async (res) => {
         if (!res.ok || !res.body) return;
         const reader = res.body.getReader();
@@ -90,9 +91,9 @@ export function SynthesisView({
       <header className="flex items-center justify-between border-b border-rule pb-6 mb-10">
         <div>
           <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted mb-1">
-            <a href="/dashboard" className="hover:text-ink transition-colors">← Dashboard</a>
+            <Link href="/dashboard" className="hover:text-ink transition-colors">← Dashboard</Link>
             &nbsp;·&nbsp;
-            <a href="/synthesis" className="hover:text-ink transition-colors">Past Drafts</a>
+            <Link href="/synthesis" className="hover:text-ink transition-colors">Past Drafts</Link>
           </div>
           <h1 className="font-serif text-2xl md:text-3xl font-semibold leading-tight tracking-tight line-clamp-2">
             {title}

@@ -6,9 +6,8 @@ export default function Handler(props: unknown) {
     <StackHandler
       fullPage
       app={stackServerApp}
-      // Stack passes a typed prop here; keeping `any` avoids a brittle generic
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      routeProps={props as any}
+      // Stack passes a typed prop here; casting through unknown avoids a brittle generic
+      routeProps={props as Record<string, unknown>}
     />
   );
 }

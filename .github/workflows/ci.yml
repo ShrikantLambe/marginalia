@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm test
+      # Build with placeholder env so module-level env guards don't fail the run.
+      # This checks the app compiles and routes are valid, not runtime behavior.
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          SUPABASE_SECRET_KEY: placeholder
+          NEXT_PUBLIC_STACK_PROJECT_ID: placeholder
+          NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY: placeholder
+          STACK_SECRET_SERVER_KEY: placeholder
+          GEMINI_API_KEY: placeholder

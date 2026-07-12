@@ -24,7 +24,7 @@ Copy `.env.example` to `.env.local` and fill in all variables:
 | `NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY` | Stack Auth dashboard → API Keys |
 | `STACK_SECRET_SERVER_KEY` | Stack Auth dashboard → API Keys |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Project Settings → API |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API (service_role secret, not anon) |
+| `SUPABASE_SECRET_KEY` | Supabase → Project Settings → API Keys — the **secret** key (`sb_secret_…`), NOT publishable. Bypasses RLS. Legacy `SUPABASE_SERVICE_ROLE_KEY` still read as a fallback |
 | `GEMINI_API_KEY` | https://aistudio.google.com/apikey |
 | `TAVILY_API_KEY` | https://tavily.com — powers Discover web search; empty = mock provider |
 | `SEARCH_PROVIDER` | optional; set to `mock` to force the mock search provider |
@@ -109,7 +109,7 @@ POST /api/items
 - [lib/clustering.ts](lib/clustering.ts) — DBSCAN (adaptive epsilon 0.4→0.75) with k-means fallback; `clusterUser()` entry point
 - [lib/editorial.ts](lib/editorial.ts) — `generateEditorialNote()`: one-sentence annotation from last 20 articles
 - [lib/brief-routing.ts](lib/brief-routing.ts) — `autoRouteToBriefs()` (called after embedding a new item), `autoMatchItemsToBrief()` (called after creating a brief); cosine similarity threshold 0.55; never throws
-- [lib/usage-log.ts](lib/usage-log.ts) — `checkAndLog()` (atomic check+insert via Postgres RPC); 150 ops/day limit
+- [lib/usage-log.ts](lib/usage-log.ts) — `checkAndLog()` (atomic check+insert via Postgres RPC); exported `DAILY_LIMIT` (400) shared across all AI operations. Use the constant in user-facing copy, never a hardcoded number
 - [lib/rate-limit.ts](lib/rate-limit.ts) — in-process soft rate limiter (per-user per-endpoint)
 - [lib/chat.ts](lib/chat.ts) — in-reader chat: `buildChatPrompt()`, `streamChatAnswer()`, `generateInsight()`
 - [lib/domains.ts](lib/domains.ts) — `normalizeDomain()`: URL/domain → eTLD+1 via tldts (never hand-rolled)
@@ -143,9 +143,21 @@ POST /api/items
 | 017 | scroll_progress column on reading_list (Welcome Back reading progress) |
 | 018 | 'failed' status + failure_reason; data-fix for corrupt failure-text summaries; draft title backfill |
 
-**Supabase client** uses `service_role` key server-side only — bypasses RLS. All tables have RLS explicitly disabled. Never send `SUPABASE_SERVICE_ROLE_KEY` to the client.
+**Supabase client** ([lib/supabase.ts](lib/supabase.ts)) uses the **secret** key server-side only — it bypasses RLS, so every query MUST scope by `user_id` in app code (that is the security boundary). A publishable/anon key here returns zero rows once RLS is on. Never send the secret key to the client.
 
 **Gemini prompt contract in summarize.ts:** output must contain `---TAGS---` separator. Parser splits on this; changing the prompt without updating the parser breaks tag extraction silently.
+
+## Security invariants
+
+- **Saved article HTML is sanitized with DOMPurify** in [lib/summarize.ts](lib/summarize.ts) (`sanitizeHtml`) before storage, because the reader injects it via `innerHTML`. This is the XSS boundary — never downgrade it to a regex blacklist. (`isomorphic-dompurify` is in `serverExternalPackages`.)
+- **User-supplied URLs are fetched only through `safeFetch`** ([lib/safe-fetch.ts](lib/safe-fetch.ts)): blocks non-http(s) schemes and private/link-local/metadata IPs, and re-validates every redirect hop (SSRF guard). Used by `summarize.ts` (capture) and `bylines.ts` (Discover byline verification).
+- **Every API route resolves the Stack Auth user and filters by `user_id`.** RLS is a second layer, not the only one.
+- **`/api/debug` and `/api/debug/clustering` are gated behind `ENABLE_DEBUG_ENDPOINT=1`** (404 otherwise).
+- **State-mutating operations are POST**, never GET — a GET can be prefetched/crawled and silently spend Gemini budget (this is why `synthesize/[id]/stream` is POST).
+
+## CI
+
+[.github/workflows/ci.yml](.github/workflows/ci.yml) runs on push and PR: `tsc --noEmit` → `next lint` → `npm test` → `next build`. Lint config is [.eslintrc.json](.eslintrc.json) (`next/core-web-vitals`); `npm run lint` must pass with no errors before merge.
 
 ## Styling
 

@@ -9,6 +9,11 @@ export async function GET() {
   const user = await stackServerApp.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Diagnostic endpoint — off by default. Set ENABLE_DEBUG_ENDPOINT=1 to use it.
+  if (process.env.ENABLE_DEBUG_ENDPOINT !== "1") {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const result: Record<string, unknown> = {};
 
   // 0. List available embedding models
@@ -56,12 +61,12 @@ export async function GET() {
     ? `TABLE ERROR: ${tableError.message}`
     : (allRows ?? 0);
 
-  // Show distinct user_ids in the table
-  const { data: userRows } = await supabase
+  // Whether the current user has any rows (does not leak other users' IDs)
+  const { count: myRows } = await supabase
     .from("reading_list")
-    .select("user_id")
-    .limit(5);
-  result.sample_user_ids_in_db = [...new Set(userRows?.map((r) => r.user_id) ?? [])];
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id);
+  result.current_user_row_count = myRows ?? 0;
 
   // 3. Does the RPC function exist?
   if (result.embed?.toString().startsWith("ok")) {

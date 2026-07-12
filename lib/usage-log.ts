@@ -1,7 +1,7 @@
 import "server-only";
 import { supabase } from "./supabase";
 
-const DAILY_LIMIT = 400;
+export const DAILY_LIMIT = 400;
 
 export type Operation = "summarize" | "embed" | "cluster-name" | "synthesize" | "editorial-note" | "chat" | "chat-insight" | "discover";
 
