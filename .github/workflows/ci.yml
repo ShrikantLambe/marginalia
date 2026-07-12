@@ -21,14 +21,8 @@ jobs:
         run: npm run lint
       - name: Unit tests
         run: npm test
-      # Build with placeholder env so module-level env guards don't fail the run.
-      # This checks the app compiles and routes are valid, not runtime behavior.
-      - name: Build
-        run: npm run build
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-          SUPABASE_SECRET_KEY: placeholder
-          NEXT_PUBLIC_STACK_PROJECT_ID: placeholder
-          NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY: placeholder
-          STACK_SECRET_SERVER_KEY: placeholder
-          GEMINI_API_KEY: placeholder
+      # NOTE: `next build` is intentionally NOT run here. Build-time page-data
+      # collection instantiates Stack Auth, which validates NEXT_PUBLIC_STACK_
+      # PROJECT_ID as a real UUID — a hermetic CI run has no valid credentials.
+      # Vercel builds with the real env on every push, so it is the build gate;
+      # CI covers the checks Vercel doesn't (typecheck, lint, tests).
