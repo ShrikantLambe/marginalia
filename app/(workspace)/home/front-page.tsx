@@ -150,7 +150,8 @@ export function FrontPage({ firstName }: { firstName: string | null }) {
       <div className="border-t-2 border-b border-ink py-2 mb-10">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
           <span className={`${MONO} text-[11px] text-ink`}>Marginalia</span>
-          <span className={`${MONO} text-[10px] text-muted sm:order-none order-last`}>
+          {/* Browser clock differs from the server's at SSR — patch, don't warn */}
+          <span suppressHydrationWarning className={`${MONO} text-[10px] text-muted sm:order-none order-last`}>
             {dateline} · {EDITION_LABEL[edition]}
           </span>
           {standfirst && standfirst.queueCount > 0 ? (
@@ -164,7 +165,7 @@ export function FrontPage({ firstName }: { firstName: string | null }) {
       </div>
 
       {/* ── HEADLINE ── */}
-      <h1 className="font-serif text-[34px] md:text-[46px] font-semibold leading-tight tracking-tight mb-8">
+      <h1 suppressHydrationWarning className="font-serif text-[34px] md:text-[46px] font-semibold leading-tight tracking-tight mb-8">
         {edition === "late" ? (
           firstName ? <>Up late, <span className="text-oxblood">{firstName}</span>?</> : <>Up late?</>
         ) : (
