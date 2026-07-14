@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { stackServerApp } from "@/stack";
 import { supabase } from "@/lib/supabase";
 import { embed } from "@/lib/embeddings";
@@ -80,9 +80,10 @@ export async function PATCH(req: Request, { params }: Params) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Re-run auto-match with new embedding (fire-and-forget)
+  // Re-run auto-match with new embedding, deferred via after()
   if (newEmbeddingVec) {
-    autoMatchItemsToBrief(user.id, id, newEmbeddingVec).catch(() => {});
+    const vec = newEmbeddingVec;
+    after(() => autoMatchItemsToBrief(user.id, id, vec).catch(() => {}));
   }
 
   return NextResponse.json(data);

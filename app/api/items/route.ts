@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { stackServerApp } from "@/stack";
 import { supabase } from "@/lib/supabase";
 import { fetchAndSummarize, ExtractionError, titleFromUrl } from "@/lib/summarize";
@@ -75,15 +75,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Auto-route to matching briefs — fire-and-forget
-    if (embeddingVec) {
-      autoRouteToBriefs(user.id, savedItem.id, embeddingVec).catch(() => {});
-    }
-
-    // Editorial annotation — fire-and-forget, never blocks the response.
-    // Checks limit before firing so annotation doesn't silently exceed quota.
-    checkAndLog(user.id, "editorial-note")
-      .then(async (allowed) => {
+    // Enrichment runs after the response is sent, but via after() so the
+    // platform keeps the function alive until it completes (a bare .then()
+    // can be dropped when the serverless instance is reclaimed).
+    after(async () => {
+      if (embeddingVec) {
+        await autoRouteToBriefs(user.id, savedItem.id, embeddingVec).catch(() => {});
+      }
+      // Editorial annotation — checks the limit before firing so it doesn't
+      // silently exceed quota.
+      try {
+        const allowed = await checkAndLog(user.id, "editorial-note");
         if (!allowed) return;
         const annotation = await generateEditorialNote(user.id, savedItem.id, title, summary);
         if (!annotation) return;
@@ -92,8 +94,8 @@ export async function POST(req: Request) {
           editorial_references: annotation.references,
           editorial_generated_at: new Date().toISOString(),
         }).eq("id", savedItem.id);
-      })
-      .catch(() => {});
+      } catch { /* enrichment is best-effort */ }
+    });
 
     return NextResponse.json(savedItem);
   } catch (e) {

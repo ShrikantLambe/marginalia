@@ -20,31 +20,14 @@ export async function POST(
       ? Math.round(body.progress)
       : null;
 
-  const updates: Record<string, unknown> = { last_opened_at: new Date().toISOString() };
-
-  if (progress !== null) {
-    // Only ever move progress upward — a re-open at the top must not erase 62%
-    const { data: current } = await supabase
-      .from("reading_list")
-      .select("scroll_progress, status")
-      .eq("id", id)
-      .eq("user_id", user.id)
-      .single();
-    if (current && progress > (current.scroll_progress ?? 0)) {
-      updates.scroll_progress = progress;
-      // Finishing the article marks it read, matching the manual flow
-      if (progress >= 100 && current.status !== "read" && current.status !== "archived") {
-        updates.status = "read";
-        updates.read_at = new Date().toISOString();
-      }
-    }
-  }
-
-  await supabase
-    .from("reading_list")
-    .update(updates)
-    .eq("id", id)
-    .eq("user_id", user.id);
+  // Single atomic UPDATE: last_opened_at bumped, scroll_progress moved up only
+  // (GREATEST), and status flipped to 'read' at 100%. Avoids the read-then-write
+  // race where concurrent 25/50/75/100% beacons could regress progress.
+  await supabase.rpc("record_reading_progress", {
+    p_item_id: id,
+    p_user_id: user.id,
+    p_progress: progress,
+  });
 
   return NextResponse.json({ ok: true });
 }

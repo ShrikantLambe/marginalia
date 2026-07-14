@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { stackServerApp } from "@/stack";
 import { supabase, type Source, type DiscoverResult, type DiscoverScope } from "@/lib/supabase";
 import { search, SEARCH_PROVIDER_NAME, ProviderAuthError, ProviderRateLimitError } from "@/lib/search-provider";
@@ -64,8 +64,11 @@ export async function POST(req: Request) {
   }
   const authorNames = sources.filter((s) => s.type === "author").map((s) => s.value);
 
-  // Lazy cleanup of this user's expired cache rows (cheap, avoids a cron)
-  void supabase.from("discover_cache").delete().eq("user_id", user.id).lt("expires_at", new Date().toISOString());
+  // Lazy cleanup of this user's expired cache rows (cheap, avoids a cron) —
+  // deferred; the current request's cache read already filters expired rows.
+  after(() => {
+    void supabase.from("discover_cache").delete().eq("user_id", user.id).lt("expires_at", new Date().toISOString());
+  });
 
   // Cache check — hits skip the provider AND the daily budget
   const cacheKey = buildCacheKey(query, allowlist);
@@ -107,38 +110,38 @@ export async function POST(req: Request) {
 
   // 4. ENFORCEMENT — the actual guardrail
   const { kept, dropped } = enforceAllowlist(providerResults, allowlist);
-  if (dropped.length) {
-    void supabase.from("discover_guardrail_violations").insert(
-      dropped.map((d) => ({ user_id: user.id, query, url: d.url, provider: SEARCH_PROVIDER_NAME }))
-    );
-  }
 
   // 5. Byline verification for author-scoped results (bounded: 5 concurrent, 10s budget)
-  let results: DiscoverResult[] = kept;
-  if (authorNames.length > 0) {
-    results = await verifyBylines(kept, authorNames);
-  }
+  const verified: DiscoverResult[] = authorNames.length > 0 ? await verifyBylines(kept, authorNames) : kept;
 
-  // 6. Cache + log, then attach library dedupe state
-  void supabase.from("discover_cache").upsert(
-    {
+  // 6. Persist cache + logs after the response (deferred so it can't be dropped
+  //    when the instance is reclaimed, and doesn't delay the results).
+  after(() => {
+    if (dropped.length) {
+      void supabase.from("discover_guardrail_violations").insert(
+        dropped.map((d) => ({ user_id: user.id, query, url: d.url, provider: SEARCH_PROVIDER_NAME }))
+      );
+    }
+    void supabase.from("discover_cache").upsert(
+      {
+        user_id: user.id,
+        cache_key: cacheKey,
+        results: verified,
+        expires_at: new Date(Date.now() + CACHE_TTL_MS).toISOString(),
+      },
+      { onConflict: "user_id,cache_key" }
+    );
+    void supabase.from("discover_searches").insert({
       user_id: user.id,
+      query,
+      scope,
       cache_key: cacheKey,
-      results,
-      expires_at: new Date(Date.now() + CACHE_TTL_MS).toISOString(),
-    },
-    { onConflict: "user_id,cache_key" }
-  );
-  void supabase.from("discover_searches").insert({
-    user_id: user.id,
-    query,
-    scope,
-    cache_key: cacheKey,
-    result_count: results.length,
-    dropped_count: dropped.length,
+      result_count: verified.length,
+      dropped_count: dropped.length,
+    });
   });
 
-  results = await attachLibraryState(user.id, results);
+  const results = await attachLibraryState(user.id, verified);
 
   return NextResponse.json({
     results,

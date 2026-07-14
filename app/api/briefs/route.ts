@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { stackServerApp } from "@/stack";
 import { supabase } from "@/lib/supabase";
 import { embed } from "@/lib/embeddings";
@@ -72,7 +72,8 @@ export async function POST(req: Request) {
 
   // Auto-match existing items against this brief (fire-and-forget)
   if (embeddingVec) {
-    autoMatchItemsToBrief(user.id, brief.id, embeddingVec).catch(() => {});
+    const vec = embeddingVec;
+    after(() => autoMatchItemsToBrief(user.id, brief.id, vec).catch(() => {}));
   }
 
   return NextResponse.json(brief);
