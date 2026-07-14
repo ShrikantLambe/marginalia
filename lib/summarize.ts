@@ -4,6 +4,7 @@ import { Readability } from "@mozilla/readability";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import DOMPurify from "isomorphic-dompurify";
 import { safeFetch, UnsafeUrlError } from "./safe-fetch";
+import { withRetry } from "./retry";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
@@ -122,10 +123,10 @@ Part 2: 3-5 short topic tags (lowercase, one or two words each), comma-separated
 VIDEO TITLE: ${title}
 CHANNEL: ${author ?? "unknown"}`;
 
-  const geminiResult = await model.generateContent([
+  const geminiResult = await withRetry(() => model.generateContent([
     { fileData: { fileUri: url, mimeType: "video/mp4" } },
     { text: prompt },
-  ]);
+  ]));
   const raw = geminiResult.response.text().trim();
 
   const parts = raw.split(/---TAGS---/i).map(s => s.trim());
@@ -225,7 +226,7 @@ ARTICLE TITLE: ${title}
 ARTICLE CONTENT:
 ${textForGemini}`;
 
-  const geminiResult = await model.generateContent(prompt);
+  const geminiResult = await withRetry(() => model.generateContent(prompt));
   const raw = geminiResult.response.text().trim();
 
   const parts = raw.split(/---TAGS---/i).map(s => s.trim());

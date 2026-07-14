@@ -1,4 +1,5 @@
 import "server-only";
+import { withRetry } from "./retry";
 
 export const EMBEDDING_MODEL = "gemini-embedding-001";
 export const EMBEDDING_DIM = 768;
@@ -42,33 +43,46 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   return na && nb ? dot / (Math.sqrt(na) * Math.sqrt(nb)) : 0;
 }
 
-// API key goes in a header, not a query param, so it doesn't appear in logs
+class GeminiHttpError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+// API key goes in a header, not a query param, so it doesn't appear in logs.
+// Retries transient failures (429/5xx) with backoff — the key's rate limit is
+// shared across all users, so bursts of concurrent saves collide.
 export async function embed(text: string): Promise<number[]> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY is not set");
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": key,
-      },
-      body: JSON.stringify({
-        model: `models/${EMBEDDING_MODEL}`,
-        content: { parts: [{ text }] },
-        outputDimensionality: EMBEDDING_DIM,
-      }),
+  return withRetry(async () => {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": key,
+        },
+        body: JSON.stringify({
+          model: `models/${EMBEDDING_MODEL}`,
+          content: { parts: [{ text }] },
+          outputDimensionality: EMBEDDING_DIM,
+        }),
+      }
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      // Carry the status so withRetry can tell transient from permanent
+      throw new GeminiHttpError(res.status, data?.error?.message ?? `Gemini embedding error ${res.status}`);
     }
-  );
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data?.error?.message ?? `Gemini embedding error ${res.status}`);
-  }
-  const values = data.embedding.values as number[];
-  if (values.length !== EMBEDDING_DIM) {
-    throw new Error(`Expected ${EMBEDDING_DIM}-dim embedding, got ${values.length}`);
-  }
-  return values;
+    const values = data.embedding.values as number[];
+    if (values.length !== EMBEDDING_DIM) {
+      throw new Error(`Expected ${EMBEDDING_DIM}-dim embedding, got ${values.length}`);
+    }
+    return values;
+  });
 }

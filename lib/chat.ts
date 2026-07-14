@@ -1,6 +1,7 @@
 import "server-only";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { ChatMessage } from "./supabase";
+import { withRetry } from "./retry";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
@@ -33,7 +34,9 @@ You:`;
 
 export async function streamChatAnswer(prompt: string) {
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-  return model.generateContentStream(prompt);
+  // Retry only the initial call (before the first chunk); once streaming
+  // begins we can't safely retry mid-stream.
+  return withRetry(() => model.generateContentStream(prompt));
 }
 
 export function buildInsightPrompt(articleText: string, contextNote: string | null): string {
@@ -56,7 +59,7 @@ export async function generateInsight(
 ): Promise<string | null> {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const result = await model.generateContent(buildInsightPrompt(articleText, contextNote));
+    const result = await withRetry(() => model.generateContent(buildInsightPrompt(articleText, contextNote)));
     const text = result.response.text().trim();
     return text || null;
   } catch {
