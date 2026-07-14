@@ -1,0 +1,29 @@
+name: Feature request
+description: Suggest an idea for Marginalia
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's the problem or need?
+      description: What are you trying to do that's hard or impossible today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Fit with the project
+      description: Marginalia is deliberately small and opinionated (see DESIGN.md).
+      options:
+        - label: This works within the existing design system (no new tokens/shadows/animation)
+        - label: This doesn't require a new third-party service beyond the current stack
