@@ -17,7 +17,6 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => ({}));
   const url = typeof body?.url === "string" ? body.url.trim() : "";
-  const projectId = typeof body?.project_id === "string" ? body.project_id : null;
   if (!url) return NextResponse.json({ error: "URL is required" }, { status: 400 });
   try { new URL(url); } catch {
     return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
@@ -76,12 +75,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Assign to project if requested — fire-and-forget
-    if (projectId) {
-      void supabase.from("project_items")
-        .upsert({ project_id: projectId, item_id: savedItem.id }, { onConflict: "project_id,item_id", ignoreDuplicates: true });
-    }
-
     // Auto-route to matching briefs — fire-and-forget
     if (embeddingVec) {
       autoRouteToBriefs(user.id, savedItem.id, embeddingVec).catch(() => {});
@@ -126,10 +119,6 @@ export async function POST(req: Request) {
           return NextResponse.json({ duplicate: true, item: existing }, { status: 409 });
         }
         return NextResponse.json({ error: error.message }, { status: 500 });
-      }
-      if (projectId) {
-        void supabase.from("project_items")
-          .upsert({ project_id: projectId, item_id: failedItem.id }, { onConflict: "project_id,item_id", ignoreDuplicates: true });
       }
       return NextResponse.json(failedItem);
     }

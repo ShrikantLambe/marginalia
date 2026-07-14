@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { ReadingItem, ArticleHighlight, SearchResult, ReadingTheme, Project } from "@/lib/supabase";
+import type { ReadingItem, ArticleHighlight, SearchResult, ReadingTheme } from "@/lib/supabase";
 
 type Status = "queued" | "reading" | "read" | "archived";
 type Tab = "queued" | "reading" | "read" | "archived" | "failed" | "all";
@@ -390,10 +390,9 @@ function looksLikeUrl(text: string): boolean {
 }
 
 export function ReadingList({
-  initialItems, initialThemes, userName, projectId, projects, projectName, recentMargins = [],
+  initialItems, initialThemes, userName, recentMargins = [],
 }: {
   initialItems: ReadingItem[]; initialThemes: ReadingTheme[]; userName: string;
-  projectId?: string; projects?: Project[]; projectName?: string;
   recentMargins?: RecentMargin[];
 }) {
   const router = useRouter();
@@ -631,7 +630,7 @@ export function ReadingList({
           {/* Header row */}
           <div className="flex items-center justify-between mb-4">
             <h1 className="font-serif text-[22px] font-semibold leading-none tracking-tight truncate">
-              {projectName ? projectName : <span>Inbox</span>}
+              Inbox
             </h1>
             <div className="flex items-center gap-3 font-mono text-[10px] tracking-[0.12em] uppercase text-muted">
               <Link href="/synthesis" className="hover:text-ink transition-colors">Drafts</Link>
@@ -744,27 +743,6 @@ export function ReadingList({
           )}
           {!isSearching && <span />}
           <div className="flex items-center gap-3">
-            {selectMode && selectedIds.size > 0 && projects && projects.length > 0 && (
-              <select
-                onChange={async e => {
-                  const pid = e.target.value;
-                  if (!pid) return;
-                  await fetch(`/api/projects/${pid}/items`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ item_ids: [...selectedIds] }),
-                  });
-                  e.target.value = "";
-                }}
-                className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted bg-transparent border-b border-rule outline-none cursor-pointer hover:text-ink"
-                defaultValue=""
-              >
-                <option value="" disabled>assign to project…</option>
-                {projects.map(p => (
-                  <option key={p.id} value={p.id}>{p.emoji} {p.name}</option>
-                ))}
-              </select>
-            )}
             <button onClick={() => { setSelectMode(v => !v); setSelectedIds(new Set()); }}
               className={`font-mono text-[10px] tracking-[0.12em] uppercase px-2 py-0.5 border transition-colors ${
                 selectMode ? "border-oxblood text-oxblood" : "border-rule text-muted hover:border-ink hover:text-ink"

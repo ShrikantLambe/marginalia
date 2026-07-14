@@ -136,7 +136,7 @@ POST /api/items
 | 011 | Phase 7: article_html/text, author, site_name, hero_image_url, word_count, reading_time_minutes on reading_list; new `highlights` table; migrates old jsonb highlights |
 | 012 | Phase 5: `briefs` and `brief_items` tables |
 | 013 | Fix match_reading_list RPC: drops highlights column reference, adds Phase 7 metadata fields |
-| 014 | Phase 1.2: item status refinements, projects + project_items tables |
+| 014 | Phase 1.2: item status refinements, projects + project_items tables (Projects superseded by Briefs — UI/routes removed, tables left dormant) |
 | 015 | chat_messages table (in-reader Q&A, passage threads, proactive insights) |
 | 016 | Discover: sources, guardrail violations, query cache, search log, saved searches |
 | 017 | scroll_progress column on reading_list (Welcome Back reading progress) |

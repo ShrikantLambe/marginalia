@@ -94,6 +94,9 @@ export type Synthesis = {
   created_at: string;
 };
 
+// Projects were superseded by Briefs. The UI and API routes are removed; the
+// `projects` / `project_items` tables remain (dormant, no migration dropped
+// them) and these types document their shape should the feature return.
 export type Project = {
   id: string;
   user_id: string;

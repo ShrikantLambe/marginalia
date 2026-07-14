@@ -2,6 +2,26 @@
   "name": "marginalia",
   "version": "0.1.0",
   "private": true,
+  "description": "A quiet, AI-assisted reading list: save a URL, get a TL;DR, then search your library or the web through trusted sources — Next.js + Stack Auth + Supabase + Gemini.",
+  "license": "MIT",
+  "author": "Shrikant Lambe",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ShrikantLambe/marginalia.git"
+  },
+  "keywords": [
+    "reading-list",
+    "read-it-later",
+    "nextjs",
+    "supabase",
+    "pgvector",
+    "gemini",
+    "semantic-search",
+    "stack-auth"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
