@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { stackServerApp } from "@/stack";
 import { supabase } from "@/lib/supabase";
-import { fetchAndSummarize } from "@/lib/summarize";
+import { fetchArticle } from "@/lib/summarize";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-/** Re-fetch article content for items saved before Phase 7. */
+/** Re-fetch article content for items saved before article extraction existed.
+ *  Extraction only — no Gemini — so it never fails just because the summarizer
+ *  is rate-limited or down; the item already has its summary. */
 export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -27,15 +29,15 @@ export async function POST(
   if (item.article_html) return NextResponse.json({ ok: true, cached: true });
 
   try {
-    const result = await fetchAndSummarize(item.url);
+    const content = await fetchArticle(item.url);
     await supabase.from("reading_list").update({
-      article_html: result.articleHtml,
-      article_text: result.articleText,
-      author: result.author,
-      site_name: result.siteName,
-      hero_image_url: result.heroImageUrl,
-      word_count: result.wordCount,
-      reading_time_minutes: result.readingTimeMinutes,
+      article_html: content.articleHtml,
+      article_text: content.articleText,
+      author: content.author,
+      site_name: content.siteName,
+      hero_image_url: content.heroImageUrl,
+      word_count: content.wordCount,
+      reading_time_minutes: content.readingTimeMinutes,
     }).eq("id", id).eq("user_id", user.id);
     return NextResponse.json({ ok: true, cached: false });
   } catch (e) {

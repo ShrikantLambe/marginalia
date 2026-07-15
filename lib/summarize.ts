@@ -31,10 +31,9 @@ export function titleFromUrl(url: string): string {
   }
 }
 
-export type Summary = {
+/** Extracted article content — everything except the Gemini-derived fields. */
+export type ArticleContent = {
   title: string;
-  summary: string;
-  tags: string[];
   articleHtml: string;
   articleText: string;
   author: string | null;
@@ -42,6 +41,11 @@ export type Summary = {
   heroImageUrl: string | null;
   wordCount: number;
   readingTimeMinutes: number;
+};
+
+export type Summary = ArticleContent & {
+  summary: string;
+  tags: string[];
 };
 
 /**
@@ -151,9 +155,12 @@ CHANNEL: ${author ?? "unknown"}`;
   };
 }
 
-export async function fetchAndSummarize(url: string): Promise<Summary> {
-  const youtubeId = extractYouTubeId(url);
-  if (youtubeId) return fetchAndSummarizeYouTube(url, youtubeId);
+/**
+ * Fetch + extract article content only — no Gemini. Used both as the first
+ * stage of fetchAndSummarize and directly by the re-fetch endpoint, so
+ * repairing an article's content never depends on the summarizer being up.
+ */
+export async function fetchArticle(url: string): Promise<ArticleContent> {
   // 1. Fetch the page — SSRF-guarded (rejects private/internal hosts, re-checks redirects)
   const res = await safeFetch(url, {
     headers: {
@@ -186,7 +193,7 @@ export async function fetchAndSummarize(url: string): Promise<Summary> {
   }
 
   // Non-HTML content (PDFs and other binaries) can't go through Readability —
-  // fail explicitly rather than feeding garbage to Gemini.
+  // fail explicitly rather than feeding garbage downstream.
   const contentType = res.headers.get("content-type") ?? "";
   if (contentType.includes("application/pdf") || url.toLowerCase().endsWith(".pdf")) {
     throw new ExtractionError("pdf", "This is a PDF — Marginalia can only read web pages.");
@@ -205,12 +212,29 @@ export async function fetchAndSummarize(url: string): Promise<Summary> {
   }
 
   const title = article.title?.trim() || new URL(url).hostname;
-  const articleHtml = sanitizeHtml(article.content ?? "");
   const articleText = article.textContent.replace(/\s+/g, " ").trim();
-  const words = countWords(articleText);
-  const heroImageUrl = extractHeroImage(dom, url);
+  const words = countWords(article.textContent);
 
-  const textForGemini = articleText.slice(0, 12_000);
+  return {
+    title,
+    articleHtml: sanitizeHtml(article.content ?? ""),
+    articleText,
+    author: article.byline?.trim() || null,
+    siteName: article.siteName?.trim() || null,
+    heroImageUrl: extractHeroImage(dom, url),
+    wordCount: words,
+    readingTimeMinutes: Math.max(1, Math.ceil(words / 200)),
+  };
+}
+
+export async function fetchAndSummarize(url: string): Promise<Summary> {
+  const youtubeId = extractYouTubeId(url);
+  if (youtubeId) return fetchAndSummarizeYouTube(url, youtubeId);
+
+  // 1-2. Fetch + extract (no Gemini)
+  const content = await fetchArticle(url);
+
+  const textForGemini = content.articleText.slice(0, 12_000);
 
   // 3. Summarize with Gemini
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
@@ -221,7 +245,7 @@ Output two parts, separated by exactly one line containing only "---TAGS---".
 Part 1: A 3-4 sentence TL;DR. Crisp, factual, no fluff. Skip "this article discusses" filler — just say what it says.
 Part 2: 3-5 short topic tags (lowercase, one or two words each), comma-separated.
 
-ARTICLE TITLE: ${title}
+ARTICLE TITLE: ${content.title}
 
 ARTICLE CONTENT:
 ${textForGemini}`;
@@ -237,16 +261,5 @@ ${textForGemini}`;
     .filter(Boolean)
     .slice(0, 5);
 
-  return {
-    title,
-    summary,
-    tags,
-    articleHtml,
-    articleText,
-    author: article.byline?.trim() || null,
-    siteName: article.siteName?.trim() || null,
-    heroImageUrl,
-    wordCount: words,
-    readingTimeMinutes: Math.max(1, Math.ceil(words / 200)),
-  };
+  return { ...content, summary, tags };
 }
