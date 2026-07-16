@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { HomeState } from "@/lib/home";
+import type { TopicFeed } from "@/lib/tags";
+import { TopicRail } from "./topic-rail";
 
 type Edition = "morning" | "afternoon" | "evening" | "late";
 
@@ -38,7 +40,7 @@ function looksLikeUrl(text: string): boolean {
 
 const MONO = "font-mono tracking-[0.15em] uppercase";
 
-export function FrontPage({ firstName }: { firstName: string | null }) {
+export function FrontPage({ firstName, topics }: { firstName: string | null; topics: TopicFeed[] }) {
   const router = useRouter();
   const [clock, setClock] = useState<Date>(() => new Date());
   const [state, setState] = useState<HomeState | null>(null);
@@ -149,7 +151,8 @@ export function FrontPage({ firstName }: { firstName: string | null }) {
   const firstRun = state !== null && !lede && !quiet;
 
   return (
-    <main className="max-w-3xl px-6 md:px-14 pt-10 pb-24 min-h-screen flex flex-col">
+    <div className="flex gap-12 px-6 md:px-14 max-w-6xl">
+    <main className="flex-1 min-w-0 max-w-3xl pt-10 pb-24 min-h-screen flex flex-col">
       {/* ── MASTHEAD ── */}
       <div className="border-t-2 border-b border-ink py-2 mb-10">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
@@ -288,6 +291,14 @@ export function FrontPage({ firstName }: { firstName: string | null }) {
         / to search · esc for inbox
       </div>
     </main>
+
+    {/* ── TOPIC RAIL (fills the wide-screen right space) ── */}
+    <aside className="hidden xl:block w-72 flex-shrink-0 pt-10 pb-24">
+      <div className="sticky top-10 max-h-[calc(100vh-5rem)] overflow-y-auto border-l border-rule pl-8">
+        <TopicRail topics={topics} />
+      </div>
+    </aside>
+    </div>
   );
 }
 
