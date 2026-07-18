@@ -25,5 +25,17 @@ export default async function SynthesisPage({
 
   if (!data) notFound();
 
-  return <SynthesisView synthesis={data as Synthesis} />;
+  // Source items in citation order, so [n] links resolve in the preview
+  const sourceIds = (data.source_item_ids as string[]) ?? [];
+  const { data: srcRows } = sourceIds.length
+    ? await supabase
+        .from("reading_list")
+        .select("id, title")
+        .eq("user_id", user.id)
+        .in("id", sourceIds)
+    : { data: [] };
+  const byId = new Map((srcRows ?? []).map((r) => [r.id, r.title as string | null]));
+  const sources = sourceIds.map((sid) => ({ id: sid, title: byId.get(sid) ?? null }));
+
+  return <SynthesisView synthesis={data as Synthesis} sources={sources} />;
 }

@@ -135,6 +135,23 @@ export function BriefDetail({
     router.push("/briefs");
   }
 
+  const [drafting, setDrafting] = useState(false);
+  async function draftAnswer() {
+    setDrafting(true);
+    try {
+      const res = await fetch("/api/synthesize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item_ids: items.map((bi) => bi.item_id), angle: brief.question }),
+      });
+      const data = await res.json();
+      if (res.ok) router.push(`/synthesis/${data.id}`);
+      else { setDrafting(false); alert(data.error ?? "Couldn't draft an answer."); }
+    } catch {
+      setDrafting(false);
+    }
+  }
+
   const isOpen = brief.status === "open" || brief.status === "drafting";
 
   return (
@@ -206,6 +223,22 @@ export function BriefDetail({
             </>
           )}
         </div>
+
+        {/* Draft the answer — synthesize the linked articles into a cited brief */}
+        {items.length >= 2 && (
+          <div className="mb-8">
+            <button
+              onClick={draftAnswer}
+              disabled={drafting}
+              className="font-mono text-[10px] tracking-[0.15em] uppercase border border-oxblood text-oxblood px-3 py-2 hover:bg-oxblood hover:text-paper transition-colors disabled:opacity-40"
+            >
+              {drafting ? "Drafting…" : "Draft the answer →"}
+            </button>
+            <span className="font-serif italic text-[13px] text-muted ml-3">
+              a cited synthesis of these {items.length} articles
+            </span>
+          </div>
+        )}
 
         {/* Articles */}
         {items.length === 0 ? (

@@ -3,14 +3,18 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import type { Synthesis } from "@/lib/supabase";
+import { CitedText, type Citation } from "@/app/components/CitedText";
 
 export function SynthesisView({
   synthesis,
+  sources = [],
 }: {
   synthesis: Synthesis;
+  sources?: Citation[];
 }) {
   const [draft, setDraft] = useState(synthesis.draft);
   const [streaming, setStreaming] = useState(!synthesis.draft);
+  const [preview, setPreview] = useState(false);
   const [saved, setSaved] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -103,6 +107,12 @@ export function SynthesisView({
           {!streaming && draft && (
             <>
               <button
+                onClick={() => setPreview((v) => !v)}
+                className={`font-mono text-[10px] tracking-[0.15em] uppercase transition-colors ${preview ? "text-oxblood" : "text-muted hover:text-ink"}`}
+              >
+                {preview ? "Edit" : "Preview"}
+              </button>
+              <button
                 onClick={copyToClipboard}
                 className="font-mono text-[10px] tracking-[0.15em] uppercase text-muted hover:text-ink transition-colors"
               >
@@ -136,15 +146,22 @@ export function SynthesisView({
         </div>
       )}
 
-      <textarea
-        ref={textareaRef}
-        value={draft}
-        onChange={handleChange}
-        disabled={streaming}
-        placeholder={streaming ? "" : "Draft will appear here…"}
-        className="w-full bg-transparent outline-none font-serif text-lg leading-relaxed text-ink resize-none placeholder:text-muted/40 disabled:cursor-default"
-        style={{ minHeight: "60vh" }}
-      />
+      {preview && !streaming ? (
+        // Read mode — [n] citations become links to the source items
+        <div className="font-serif text-lg leading-relaxed text-ink whitespace-pre-wrap" style={{ minHeight: "60vh" }}>
+          <CitedText text={draft} sources={sources} />
+        </div>
+      ) : (
+        <textarea
+          ref={textareaRef}
+          value={draft}
+          onChange={handleChange}
+          disabled={streaming}
+          placeholder={streaming ? "" : "Draft will appear here…"}
+          className="w-full bg-transparent outline-none font-serif text-lg leading-relaxed text-ink resize-none placeholder:text-muted/40 disabled:cursor-default"
+          style={{ minHeight: "60vh" }}
+        />
+      )}
     </main>
   );
 }
