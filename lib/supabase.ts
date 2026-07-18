@@ -71,6 +71,15 @@ export type ReadingItem = {
 
 export type SearchResult = ReadingItem & { similarity: number };
 
+export type LibraryAnswer = {
+  id: string;
+  user_id: string;
+  question: string;
+  answer: string | null;
+  source_item_ids: string[];
+  created_at: string;
+};
+
 export type ChatMessage = {
   id: string;
   user_id: string;

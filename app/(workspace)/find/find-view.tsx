@@ -5,9 +5,10 @@ import type { Source, Brief } from "@/lib/supabase";
 import { PageHeader } from "@/app/components/PageHeader";
 import { LibraryResults } from "./library-results";
 import { DiscoverPanel } from "./discover-panel";
+import { AskPanel } from "./ask-panel";
 
 type BriefLite = Pick<Brief, "id" | "question" | "status">;
-type Mode = "library" | "web";
+type Mode = "library" | "web" | "ask";
 
 const CHIP = "font-mono text-[10px] tracking-[0.12em] uppercase px-2 py-0.5 border transition-colors";
 
@@ -38,18 +39,18 @@ export function FindView({
     let initialMode: Mode = "library";
     try {
       const stored = localStorage.getItem("find-mode");
-      if (stored === "web") initialMode = "web";
+      if (stored === "web" || stored === "ask") initialMode = stored;
     } catch { /* ignore */ }
 
     const params = new URLSearchParams(window.location.search);
     const mp = params.get("mode");
-    if (mp === "web" || mp === "library") initialMode = mp;
+    if (mp === "web" || mp === "library" || mp === "ask") initialMode = mp;
     setMode(initialMode);
 
     const qp = params.get("q");
     if (qp) {
       setQuery(qp);
-      if (initialMode === "web" && params.get("run") === "1") setRunSignal((s) => s + 1);
+      if (initialMode !== "library" && params.get("run") === "1") setRunSignal((s) => s + 1);
     }
     inputRef.current?.focus();
   }, []);
@@ -74,9 +75,9 @@ export function FindView({
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // Web search costs an API call + quota, so it runs only on submit.
+    // Web + Ask cost an API call + quota, so they run only on submit.
     // Library search is live (LibraryResults debounces the query prop).
-    if (mode === "web" && query.trim()) setRunSignal((s) => s + 1);
+    if ((mode === "web" || mode === "ask") && query.trim()) setRunSignal((s) => s + 1);
   }
 
   function escalateToWeb() {
@@ -84,10 +85,17 @@ export function FindView({
     setRunSignal((s) => s + 1); // query already set
   }
 
+  function rerunAsk(q: string) {
+    setQuery(q);
+    setRunSignal((s) => s + 1);
+  }
+
   const placeholder =
     mode === "library"
       ? "Search your library by meaning…"
-      : "Search the web — only your sources.";
+      : mode === "web"
+      ? "Search the web — only your sources."
+      : "Ask a question about your library…";
 
   return (
     <div className="max-w-3xl px-8 md:px-14 py-10 pb-24">
@@ -132,6 +140,12 @@ export function FindView({
         >
           Web
         </button>
+        <button
+          onClick={() => switchMode("ask")}
+          className={`${CHIP} ${mode === "ask" ? "border-oxblood text-oxblood" : "border-rule text-muted hover:text-ink"}`}
+        >
+          Ask
+        </button>
       </div>
 
       {mode === "library" ? (
@@ -142,7 +156,7 @@ export function FindView({
           onPickConcept={setQuery}
           onEscalate={escalateToWeb}
         />
-      ) : (
+      ) : mode === "web" ? (
         <DiscoverPanel
           initialSources={sources}
           briefs={briefs}
@@ -151,6 +165,8 @@ export function FindView({
           setQuery={setQuery}
           runSignal={runSignal}
         />
+      ) : (
+        <AskPanel query={query} runSignal={runSignal} onRerun={rerunAsk} />
       )}
     </div>
   );

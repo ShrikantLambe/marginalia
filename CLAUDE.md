@@ -53,7 +53,7 @@ POST /api/items
 - `dashboard/` — reading list; `page.tsx` is a Server Component (auth + fetch), `reading-list.tsx` is `"use client"` (all interactive state). One smart capture bar (URL → capture, text → concept search); welcome panel + recent margins live in the right column pre-selection. Failed extractions render under a "Needs attention" tab.
 - `items/[id]/` — reader view; `page.tsx` fetches item + highlights server-side, `reader-view.tsx` is `"use client"`
 - `briefs/` — question-driven collections list (client component); `briefs/[id]/` — brief detail + candidate items
-- `find/` — unified search surface: one input + a Library/Web toggle. Library mode = debounced semantic search of saved items (`/api/search`); Web mode = guardrailed Discover through trusted sources with capture (`/api/discover`). `find-view.tsx` shell owns the input/toggle; `library-results.tsx` and `discover-panel.tsx` are the two engines. `/search` and `/discover` are thin redirects into `/find`.
+- `find/` — unified search surface: one input + a Library/Web toggle. Library mode = debounced semantic search of saved items (`/api/search`); Web mode = guardrailed Discover through trusted sources with capture (`/api/discover`). `find-view.tsx` shell owns the input/toggle; `library-results.tsx`, `discover-panel.tsx`, and `ask-panel.tsx` are the three engines (Library / Web / Ask). Ask = cited RAG over saved items via match_reading_list + streamed Gemini answer; citations rendered by `app/components/CitedText.tsx`. `/search` and `/discover` are thin redirects into `/find`.
 - `tags/` — tag-indexed article list (Server Component, A–Z grouped; rail label "Index"). Was `index/` — renamed because a static root page prerenders to `index.html`, which shadows a dynamic `/index` route on Vercel.
 - `sources/` — the Discover allowlist: trusted domains + authors, brief pins, library suggestions, guardrail log
 
@@ -95,6 +95,8 @@ POST /api/items
 | `/api/discover` | GET, POST | GET: recent + saved searches. POST: guardrailed web search (allowlist-enforced, cached 24h) |
 | `/api/discover/saved` | POST | Save a search (cap 20/user) |
 | `/api/discover/saved/[id]` | PATCH, DELETE | Rename / delete a saved search |
+| `/api/ask` | GET, POST | GET: recent questions. POST: embed question + retrieve top saved items, create answer row |
+| `/api/ask/[id]/stream` | POST | Stream a cited answer grounded in the retrieved items; persist on completion |
 | `/api/home-state` | GET | Front-page state: lede (resume item), standfirst (draft/queue), quiet sentence |
 | `/api/cron/cluster` | GET | Daily cron: cluster all users (requires CRON_SECRET header) |
 | `/api/debug` | GET | Health check: embed test, item counts, RPC test |
