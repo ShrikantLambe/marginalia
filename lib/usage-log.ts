@@ -3,7 +3,7 @@ import { supabase } from "./supabase";
 
 export const DAILY_LIMIT = 400;
 
-export type Operation = "summarize" | "embed" | "cluster-name" | "synthesize" | "editorial-note" | "chat" | "chat-insight" | "discover";
+export type Operation = "summarize" | "embed" | "cluster-name" | "synthesize" | "editorial-note" | "chat" | "chat-insight" | "discover" | "ask";
 
 /**
  * Atomically checks the daily limit and logs the operation in one round-trip.

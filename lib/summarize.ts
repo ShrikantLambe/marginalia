@@ -64,6 +64,61 @@ function sanitizeHtml(html: string): string {
   });
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
+ * Extract a PDF's text layer into ArticleContent so a PDF URL becomes a normal
+ * readable + chattable item. Scanned PDFs (no text layer, no OCR) fail cleanly.
+ */
+async function extractPdf(res: Response, url: string): Promise<ArticleContent> {
+  const { getDocumentProxy, extractText, getMeta } = await import("unpdf");
+  let text: string;
+  let metaTitle = "";
+  try {
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    const pdf = await getDocumentProxy(bytes);
+    const extracted = await extractText(pdf, { mergePages: true });
+    text = (extracted.text ?? "").trim();
+    try {
+      const meta = await getMeta(pdf);
+      metaTitle = (meta?.info?.Title as string | undefined)?.trim() ?? "";
+    } catch { /* no metadata */ }
+  } catch {
+    throw new ExtractionError("pdf", "Couldn't read this PDF.");
+  }
+
+  if (text.replace(/\s+/g, " ").trim().length < 200) {
+    throw new ExtractionError("pdf", "This PDF has no extractable text — it may be scanned.");
+  }
+
+  let title = metaTitle;
+  if (!title) {
+    try {
+      const seg = decodeURIComponent(new URL(url).pathname.split("/").filter(Boolean).pop() ?? "");
+      title = seg.replace(/\.pdf$/i, "").replace(/[-_]+/g, " ").trim();
+    } catch { /* fall through */ }
+  }
+  if (!title) { try { title = new URL(url).hostname.replace(/^www\./, ""); } catch { title = url; } }
+
+  const paragraphs = text.split(/\n\s*\n/).map((p) => p.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const articleHtml = sanitizeHtml(paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join("\n"));
+  const articleText = text.replace(/\s+/g, " ").trim();
+  const words = countWords(text);
+
+  return {
+    title,
+    articleHtml,
+    articleText,
+    author: null,
+    siteName: "PDF",
+    heroImageUrl: null,
+    wordCount: words,
+    readingTimeMinutes: Math.max(1, Math.ceil(words / 200)),
+  };
+}
+
 function extractHeroImage(dom: JSDOM, baseUrl: string): string | null {
   const doc = dom.window.document;
   // og:image first
@@ -192,12 +247,12 @@ export async function fetchArticle(url: string): Promise<ArticleContent> {
     throw new ExtractionError("fetch_error", `Could not fetch the page (HTTP ${res.status}).`);
   }
 
-  // Non-HTML content (PDFs and other binaries) can't go through Readability —
-  // fail explicitly rather than feeding garbage downstream.
+  // PDFs get a dedicated text-extraction path (no Readability).
   const contentType = res.headers.get("content-type") ?? "";
   if (contentType.includes("application/pdf") || url.toLowerCase().endsWith(".pdf")) {
-    throw new ExtractionError("pdf", "This is a PDF — Marginalia can only read web pages.");
+    return extractPdf(res, url);
   }
+  // Other binaries can't be read.
   if (contentType && !contentType.includes("html") && !contentType.includes("xml") && !contentType.includes("text/plain")) {
     throw new ExtractionError("empty_extract", `Can't read this content type (${contentType.split(";")[0]}).`);
   }

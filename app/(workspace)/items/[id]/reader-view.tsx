@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import type { ReadingItem, ArticleHighlight, ChatMessage } from "@/lib/supabase";
+import type { RelatedItem } from "./page";
 import { ChatPanel } from "./chat-panel";
 
 type Status = "queued" | "reading" | "read" | "archived";
@@ -87,9 +88,11 @@ function StarRating({
 export function ReaderView({
   item: initialItem,
   initialHighlights,
+  related = [],
 }: {
   item: ReadingItem;
   initialHighlights: ArticleHighlight[];
+  related?: RelatedItem[];
 }) {
   const [item, setItem] = useState(initialItem);
   const [highlights, setHighlights] = useState<ArticleHighlight[]>(initialHighlights);
@@ -579,6 +582,29 @@ export function ReaderView({
                         ✕
                       </button>
                     </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Related in your library — embedding neighbours */}
+          {related.length > 0 && (
+            <div>
+              <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-muted mb-3">
+                Related in your library
+              </div>
+              <ul className="space-y-3">
+                {related.map((r) => (
+                  <li key={r.id}>
+                    <Link href={`/items/${r.id}`} className="group block">
+                      <p className="font-serif text-[13px] leading-snug text-ink/85 group-hover:text-oxblood transition-colors">
+                        {r.title || r.url}
+                      </p>
+                      <span className="font-mono text-[9px] tracking-[0.12em] uppercase text-muted">
+                        {r.site_name || hostname(r.url)}
+                      </span>
+                    </Link>
                   </li>
                 ))}
               </ul>

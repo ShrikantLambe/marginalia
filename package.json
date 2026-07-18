@@ -40,7 +40,8 @@
     "next": "^15.0.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "tldts": "^7.4.7"
+    "tldts": "^7.4.7",
+    "unpdf": "^1.6.2"
   },
   "devDependencies": {
     "@types/jsdom": "^21.1.7",
